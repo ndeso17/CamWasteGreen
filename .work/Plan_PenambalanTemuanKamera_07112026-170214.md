@@ -772,7 +772,7 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-05 — Hapus `MicManager`, `EqualizerView`, izin audio, dan drawable mikrofon
 
-Status: qc
+Status: done
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MicManager.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/EqualizerView.kt` (hapus), `app/src/main/AndroidManifest.xml`, `app/src/main/res/drawable/ic_mic.xml` (hapus), `app/src/main/res/drawable/ic_mic_off.xml` (hapus)
 
@@ -857,6 +857,52 @@ Keterbatasan:
   tetap belum diuji.
 - Warning lint yang tersisa 108 seluruhnya non-blocking; daftar lengkap ada
   pada `lint-results-debug.txt`.
+
+### Log WP-05 (QC)
+
+Verdict: **PASS**. Laporan: `.work/evidence/QC-WP-05.md`. Commit diperiksa:
+`800886e`.
+
+QC menjalankan `./gradlew clean` lebih dulu, lalu ketiga gerbang sekaligus:
+
+```text
+./gradlew clean
+./gradlew assembleDebug testDebugUnitTest lintDebug --console=plain
+  -> BUILD SUCCESSFUL in 1m 18s, 55 task executed (bukan up-to-date)
+lint-results-debug.txt -> 0 error, 108 warning
+test-results/testDebugUnitTest/*.xml -> 1 test, 0 failure, 0 error
+```
+
+Ini gerbang mutu pertama yang **hijau penuh** pada pipeline ini: error
+`MicManager.kt:54` `MissingPermission` yang bertahan sejak baseline `c2bd177`
+hilang bersama berkasnya, dan `lintDebug` kini `BUILD SUCCESSFUL`.
+
+Kriteria terpenuhi dan dibuktikan ulang:
+
+- Empat berkas terhapus: `MicManager.kt`, `EqualizerView.kt`, `ic_mic.xml`,
+  `ic_mic_off.xml` (dicek `test -f` → tidak ada).
+- Manifest sumber memuat sembilan izin tanpa `RECORD_AUDIO`; **merged
+  manifest hasil build** juga 0 kemunculan `RECORD_AUDIO`, sehingga izin itu
+  benar-benar tidak ada pada APK, bukan hanya pada berkas sumber.
+- `grep -rn "RECORD_AUDIO\|MicManager\|EqualizerView" app/src` → tanpa hasil.
+- `grep -rn "AudioRecord\|MediaRecorder\|audio/aac\|AudioFormat" app/src` →
+  tanpa hasil.
+- Warning turun 112 → 108. `diff` daftar warning WP-04 vs WP-05 hanya memuat
+  empat baris hilang (2× `UseKtx` di `EqualizerView.kt`, 2× `UnusedResources`
+  `ic_mic*`); tidak ada warning baru. `diff` daftar clean build vs inkremental
+  → `IDENTICAL`, jadi angka 108 bukan artefak cache.
+
+Temuan note (tidak menahan WP-06):
+
+- QC-24: `AGENTS.md:44,67` dan `.work/Structure.md:26,29,51,59` masih menyebut
+  berkas audio yang sudah dihapus. Sudah dijadwalkan `T-077`/`T-078` WP-29.
+- QC-25: 108 warning sisa tidak blocker; baseline baru dicatat WP-28.
+
+Keamanan: P0-2 pada sisi aplikasi tertutup — tidak ada izin, kelas, tombol,
+maupun endpoint mikrofon. P0-3 (tanpa autentikasi, cleartext) tetap terbuka
+sampai WP-25..WP-27 dan tidak diklaim tertutup di sini.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 
