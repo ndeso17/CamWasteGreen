@@ -1,32 +1,30 @@
 package dev.ndeso17.camwastegreen
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.*
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.*
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import dev.ndeso17.camwastegreen.stream.FrameEncoder
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import java.net.NetworkInterface
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
+/**
+ * UI operator: memulai [CameraService] dan menampilkan statusnya.
+ *
+ * Activity ini tidak lagi memegang kamera maupun server. Menghentikan Activity
+ * tidak menghentikan stream (T-049); hanya [CameraService] yang melakukannya.
+ */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var previewView: PreviewView
     private lateinit var tvFpsInfo: TextView
     private lateinit var tvQualityInfo: TextView
     private lateinit var tvIpInfo: TextView
@@ -42,30 +40,37 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSwitchCamera: ImageButton
     private lateinit var btnOrientationLock: ImageButton
     private lateinit var tvUsbStatus: TextView
+    private lateinit var tvCameraState: TextView
     private lateinit var controlPanel: LinearLayout
     private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
 
-    // Filter menu
-
-    private var isStreaming = false
     private var currentFps = 20
     private var currentQuality = 80
-    private var lastFrameTimestamp = 0L
-    private var useFrontCamera = false
     private var isOrientationLocked = false
 
-    private lateinit var cameraExecutor: ExecutorService
-    private var cameraProvider: ProcessCameraProvider? = null
-    private var camera: androidx.camera.core.Camera? = null
+    private val handler = Handler(Looper.getMainLooper())
 
-    // H.264 streaming
-    private var streamEncoder: StreamEncoder? = null
-    private var tcpStreamServer: TcpStreamServer? = null
+    /** Pembaruan status dari registry milik service, bukan dari nilai konfigurasi. */
+    private val statusLoop = object : Runnable {
+        override fun run() {
+            updateUI()
+            handler.postDelayed(this, STATUS_INTERVAL_MS)
+        }
+    }
 
     companion object {
         private const val TAG = "IPCam.MainActivity"
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private const val STATUS_INTERVAL_MS = 1000L
+
+        /** Sama dengan default `CameraConfig` (D-29); dipakai hanya untuk teks. */
+        private const val DEFAULT_PORT = 8085
+
+        private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            arrayOf(Manifest.permission.CAMERA)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,7 +80,6 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupBottomSheet()
         setupButtonListeners()
-        cameraExecutor = Executors.newSingleThreadExecutor()
 
         if (allPermissionsGranted()) {
             updateUI()
@@ -84,8 +88,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        handler.post(statusLoop)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        handler.removeCallbacks(statusLoop)
+    }
+
+    /**
+     * Activity tidak menghentikan kamera atau server (T-049). Penghentian hanya
+     * dilakukan lewat [CameraService.ACTION_STOP].
+     */
+    override fun onDestroy() {
+        handler.removeCallbacks(statusLoop)
+        super.onDestroy()
+    }
+
     private fun initViews() {
-        previewView = findViewById(R.id.previewView)
         tvFpsInfo = findViewById(R.id.tvFpsInfo)
         tvQualityInfo = findViewById(R.id.tvQualityInfo)
         tvIpInfo = findViewById(R.id.tvIpInfo)
@@ -102,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         btnSwitchCamera = findViewById(R.id.btnSwitchCamera)
         btnOrientationLock = findViewById(R.id.btnOrientationLock)
         tvUsbStatus = findViewById(R.id.tvUsbStatus)
+        tvCameraState = findViewById(R.id.tvCameraState)
     }
 
     private fun setupBottomSheet() {
@@ -127,13 +150,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtonListeners() {
         btnRecordBg.setOnClickListener {
-            if (isStreaming) {
-                stopCamera()
-                isStreaming = false
+            if (MJPEGServerInstance.isRunning()) {
+                CameraService.stop(this)
             } else {
-                startCamera()
-                isStreaming = true
+                CameraService.start(this, currentFps, currentQuality)
             }
+            // Status sebenarnya menyusul dari registry; UI tidak mengarang.
+            handler.postDelayed({ updateUI() }, 300)
             updateUI()
         }
 
@@ -146,22 +169,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSwitchCamera.setOnClickListener {
-            if (isStreaming) {
-                useFrontCamera = !useFrontCamera
-                Log.i(TAG, "Beralih ke kamera: ${if (useFrontCamera) "Depan" else "Belakang"}")
-                previewView.post { bindCameraUseCases() }
+            if (MJPEGServerInstance.isRunning()) {
+                CameraService.switchCamera(this)
             } else {
-                Toast.makeText(this, "Start stream dulu untuk flip kamera", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.toast_start_stream_first, Toast.LENGTH_SHORT).show()
             }
         }
 
         btnOrientationLock.setOnClickListener {
             isOrientationLocked = !isOrientationLocked
             if (isOrientationLocked) {
-                requestedOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                else
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                requestedOrientation =
+                    if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    else
+                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             } else {
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
@@ -170,200 +192,118 @@ class MainActivity : AppCompatActivity() {
 
         btnIncreaseFps.setOnClickListener {
             currentFps = (currentFps + 5).coerceAtMost(30)
+            CameraService.setFps(this, currentFps)
             updateUI()
         }
         btnDecreaseFps.setOnClickListener {
             currentFps = (currentFps - 5).coerceAtLeast(5)
+            CameraService.setFps(this, currentFps)
             updateUI()
         }
         btnIncreaseQuality.setOnClickListener {
             currentQuality = (currentQuality + 10).coerceAtMost(100)
+            CameraService.setQuality(this, currentQuality)
             updateUI()
         }
         btnDecreaseQuality.setOnClickListener {
             currentQuality = (currentQuality - 10).coerceAtLeast(30)
+            CameraService.setQuality(this, currentQuality)
             updateUI()
         }
     }
 
+    /**
+     * Gambar ulang UI dari dua sumber yang berbeda dan tidak dicampur:
+     * nilai target (FPS/quality yang dipilih operator) dan status terukur
+     * (`measuredFps`, `cameraState`, `clients` dari registry service).
+     */
     private fun updateUI() {
+        val snapshot = MJPEGServerInstance.statusSnapshot()
+        val running = MJPEGServerInstance.isRunning()
+
+        tvFpsInfo.text = if (snapshot.measuredFps == null) {
+            getString(R.string.label_fps_measured_none)
+        } else {
+            getString(R.string.label_fps_measured, snapshot.measuredFps)
+        }
+
         val qualityLabel = getQualityLabel(currentQuality)
-        tvFpsInfo.text = "FPS $currentFps"
-        tvQualityInfo.text = "Quality $qualityLabel"
+        tvQualityInfo.text = getString(R.string.label_quality_level, qualityLabel)
         tvFpsValue.text = currentFps.toString()
         tvQualityValue.text = qualityLabel
 
-        if (isStreaming && MJPEGServerInstance.isRunning()) {
-            val ipAddress = getDeviceIpAddress()
-            val h264Info = if (tcpStreamServer?.isRunning() == true) " | H.264: $ipAddress:8086" else ""
-            tvIpInfo.text = "http://$ipAddress:${MJPEGServerInstance.getPort()}/video$h264Info"
+        tvIpInfo.text = if (running) {
+            getString(
+                R.string.label_stream_url,
+                getDeviceIpAddress(),
+                MJPEGServerInstance.getPort() ?: DEFAULT_PORT
+            )
         } else {
-            tvIpInfo.text = "Stream offline"
+            getString(R.string.label_stream_offline)
         }
 
-        btnRecordBg.setBackgroundResource(
-            if (isStreaming) R.drawable.bg_btn_record_on else R.drawable.bg_btn_record_off
-        )
-        btnRecordInner.visibility = if (isStreaming) View.GONE else View.VISIBLE
+        tvCameraState.text = if (running) {
+            val reason = snapshot.cameraStateReason?.let { " ($it)" } ?: ""
+            getString(R.string.label_camera_state, snapshot.cameraState + reason, snapshot.clients)
+        } else {
+            getString(R.string.label_server_stopped)
+        }
 
-        btnIncreaseFps.isEnabled = isStreaming
-        btnDecreaseFps.isEnabled = isStreaming
-        btnIncreaseQuality.isEnabled = isStreaming
-        btnDecreaseQuality.isEnabled = isStreaming
-        btnSwitchCamera.isEnabled = true
+        tvUsbStatus.text = getUsbTetheringIp()
+
+        btnRecordBg.setBackgroundResource(
+            if (running) R.drawable.bg_btn_record_on else R.drawable.bg_btn_record_off
+        )
+        btnRecordInner.visibility = if (running) View.GONE else View.VISIBLE
+
+        btnIncreaseFps.isEnabled = running
+        btnDecreaseFps.isEnabled = running
+        btnIncreaseQuality.isEnabled = running
+        btnDecreaseQuality.isEnabled = running
+        btnSwitchCamera.isEnabled = running
 
         btnOrientationLock.setImageResource(
             if (isOrientationLocked) R.drawable.ic_rotate_locked else R.drawable.ic_rotate
         )
-        tvUsbStatus.text = getUsbTetheringIp()
     }
 
-    private fun getQualityLabel(quality: Int): String {
-        return when {
-            quality >= 80 -> "High"
-            quality >= 50 -> "Medium"
-            else -> "Low"
-        }
+    /** Label tingkat kualitas. Ini nilai target, bukan pengukuran. */
+    private fun getQualityLabel(quality: Int): String = when {
+        quality >= 80 -> getString(R.string.quality_high)
+        quality >= 50 -> getString(R.string.quality_medium)
+        else -> getString(R.string.quality_low)
     }
 
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
+    private fun allPermissionsGranted(): Boolean = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (allPermissionsGranted()) {
-                updateUI()
-            } else {
-                Log.e(TAG, "Izin kamera tidak diberikan.")
-                Toast.makeText(this, "Aplikasi memerlukan izin kamera", Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }
-    }
+        if (requestCode != REQUEST_CODE_PERMISSIONS) return
 
-    private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            try {
-                cameraProvider = cameraProviderFuture.get()
-                bindCameraUseCases()
-            } catch (exc: Exception) {
-                Log.e(TAG, "Gagal memulai kamera: ${exc.message}", exc)
-                Toast.makeText(this, "Gagal memulai kamera", Toast.LENGTH_SHORT).show()
-            }
-        }, ContextCompat.getMainExecutor(this))
-    }
+        val cameraIndex = REQUIRED_PERMISSIONS.indexOf(Manifest.permission.CAMERA)
+        val cameraGranted =
+            grantResults.getOrNull(cameraIndex) == PackageManager.PERMISSION_GRANTED
 
-    private fun bindCameraUseCases() {
-        if (cameraProvider == null) return
-
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-
-        val imageAnalysis = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setTargetResolution(android.util.Size(1280, 720))
-            .build()
-
-        // H.264 stream encoder
-        val encoder = StreamEncoder()
-        streamEncoder = encoder
-        try {
-            encoder.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start H.264 encoder", e)
-            streamEncoder = null
-        }
-
-        imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
-            if (imageProxy.format != ImageFormat.YUV_420_888 || imageProxy.planes.size < 3) {
-                imageProxy.close()
-                return@setAnalyzer
-            }
-
-            // Waktu tangkap diambil paling awal, sebelum konversi apa pun,
-            // supaya usia frame tidak lebih muda daripada kenyataan.
-            val capturedAtMs = System.currentTimeMillis()
-            val currentTime = SystemClock.elapsedRealtime()
-            val frameInterval = 1000 / currentFps
-
-            if (currentTime - lastFrameTimestamp < frameInterval) {
-                imageProxy.close()
-                return@setAnalyzer
-            }
-            lastFrameTimestamp = currentTime
-
-            try {
-                val encoded = FrameEncoder.encode(imageProxy, currentQuality)
-                if (encoded == null) {
-                    // Kegagalan enkode dicatat sebagai alasan pada /status
-                    MJPEGServerInstance.reportCameraError("encode_failed")
-                } else {
-                    MJPEGServerInstance.publishFrame(
-                        encoded.jpeg, encoded.width, encoded.height, capturedAtMs
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pada analyzer: ${e.message}", e)
-                MJPEGServerInstance.reportCameraError("analyzer_failed")
-            } finally {
-                imageProxy.close()
-            }
-        }
-
-        val cameraSelector =
-            if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-
-        try {
-            cameraProvider?.unbindAll()
-            camera = cameraProvider?.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
-
-            if (!MJPEGServerInstance.isRunning()) {
-                MJPEGServerInstance.start(this, 8085)
-                Log.i(TAG, "Server MJPEG aktif di port ${MJPEGServerInstance.getPort()}")
-            }
-
-            if (streamEncoder != null) {
-                tcpStreamServer = TcpStreamServer(streamEncoder!!)
-                tcpStreamServer?.start()
-                Log.i(TAG, "H.264 TCP stream server started on port 8086")
-            }
-
+        if (cameraGranted) {
+            // Izin notifikasi opsional: tanpa izin itu service tetap berjalan.
             updateUI()
-        } catch (exc: Exception) {
-            Log.e(TAG, "Gagal mengikat kamera: ${exc.message}", exc)
-            Toast.makeText(this, "Gagal menghubungkan kamera", Toast.LENGTH_SHORT).show()
+        } else {
+            Log.e(TAG, "Izin kamera tidak diberikan.")
+            Toast.makeText(this, R.string.toast_camera_required, Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
-    private fun stopCamera() {
-        tcpStreamServer?.stop()
-        tcpStreamServer = null
-        streamEncoder?.release()
-        streamEncoder = null
-        cameraProvider?.unbindAll()
-        camera = null
-        Log.i(TAG, "Kamera dihentikan.")
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        Log.i(TAG, "Orientasi berubah: ${newConfig.orientation}")
-        if (isStreaming) {
-            previewView.post { bindCameraUseCases() }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        stopCamera()
-        MJPEGServerInstance.stop()
-        cameraExecutor.shutdown()
-    }
-
+    /**
+     * Alamat interface USB tethering bila ada. Hanya melaporkan apa yang
+     * terlihat; "USB: --" berarti tidak ada interface USB yang aktif.
+     */
     private fun getUsbTetheringIp(): String {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
@@ -373,17 +313,17 @@ class MainActivity : AppCompatActivity() {
                 if (intf.isUp && (name == "usb0" || name == "rndis0" || name == "eth0")) {
                     val enumIpAddr = intf.inetAddresses
                     while (enumIpAddr.hasMoreElements()) {
-                        val inetAddress = enumIpAddr.nextElement()
-                        if (!inetAddress.isLoopbackAddress && inetAddress is java.net.Inet4Address) {
-                            return "USB: ${inetAddress.hostAddress} | MJPEG:8085 H.264:8086"
+                        val address = enumIpAddr.nextElement()
+                        if (!address.isLoopbackAddress && address is java.net.Inet4Address) {
+                            return getString(R.string.label_usb_present, address.hostAddress ?: "--")
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Gagal mendapatkan USB IP", e)
+            Log.e(TAG, "Gagal mendapatkan IP USB", e)
         }
-        return "USB: --"
+        return getString(R.string.label_usb_absent)
     }
 
     private fun getDeviceIpAddress(): String {

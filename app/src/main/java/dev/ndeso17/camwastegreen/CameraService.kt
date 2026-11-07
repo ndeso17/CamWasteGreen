@@ -14,37 +14,68 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import android.graphics.ImageFormat
+import android.util.Size
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import dev.ndeso17.camwastegreen.stream.FrameEncoder
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
 import dev.ndeso17.camwastegreen.stream.StatusSnapshot
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
- * Foreground service yang menjaga jalur kamera tetap hidup saat Activity
- * berhenti atau layar mati (CWG-11).
+ * Foreground service pemilik jalur kamera dan server MJPEG (CWG-11).
  *
- * WP-17 hanya mendirikan wadahnya: service, kanal notifikasi, dan status
- * foreground. Pengikatan kamera dan pengelolaan server tetap berada di
- * `MainActivity` sampai WP-18 memindahkannya ke sini. Karena itu service ini
- * belum mengubah perilaku stream.
+ * Kamera diikat ke [Lifecycle] milik service ini, bukan ke Activity. Akibatnya
+ * stream bertahan saat layar mati atau Activity ditutup, dan Activity hanya
+ * menjadi pemulai service serta penampil status.
  *
- * Notifikasi menampilkan keadaan kamera dan jumlah klien yang dilaporkan
- * `StatusRegistry`. Nilai itu berasal dari status terukur, bukan dari
- * konfigurasi.
+ * Lifecycle service selalu [Lifecycle.State.RESUMED] selama service berjalan,
+ * karena siklus hidup service tidak mengikuti visibilitas layar.
  */
-class CameraService : Service() {
+class CameraService : Service(), LifecycleOwner {
 
     companion object {
         private const val TAG = "IPCam.CameraService"
 
-        /** Mulai service ini. Wajib dipanggil dari Activity atau receiver. */
+        /** Mulai service dan kamera. Wajib dipanggil dari Activity atau receiver. */
         const val ACTION_START = "dev.ndeso17.camwastegreen.action.START_CAMERA"
 
-        /** Hentikan service dan notifikasi foreground-nya. */
+        /** Hentikan kamera, server, dan service. */
         const val ACTION_STOP = "dev.ndeso17.camwastegreen.action.STOP_CAMERA"
+
+        /** Tukar kamera depan/belakang. */
+        const val ACTION_SWITCH_CAMERA = "dev.ndeso17.camwastegreen.action.SWITCH_CAMERA"
+
+        /** Ubah FPS target. */
+        const val ACTION_SET_FPS = "dev.ndeso17.camwastegreen.action.SET_FPS"
+
+        /** Ubah kualitas JPEG. */
+        const val ACTION_SET_QUALITY = "dev.ndeso17.camwastegreen.action.SET_QUALITY"
+
+        /** Extra untuk [ACTION_SET_FPS] dan [ACTION_SET_QUALITY]. */
+        const val EXTRA_VALUE = "extra_value"
+
+        /** Extra FPS dan kualitas awal pada [ACTION_START]. */
+        private const val EXTRA_FPS = "extra_fps"
+        private const val EXTRA_QUALITY = "extra_quality"
+
+        /** Nilai sementara; WP-22 memindahkannya ke `CameraConfig` (D-29). */
+        private const val DEFAULT_FPS = 20
+        private const val DEFAULT_QUALITY = 80
+        private const val DEFAULT_PORT = 8085
 
         private const val CHANNEL_ID = "camera_stream"
         private const val CHANNEL_NAME = "Kamera dan stream"
@@ -61,17 +92,61 @@ class CameraService : Service() {
          * sudah memegang izin kamera; bila tidak, service melaporkan
          * kegagalannya sebagai status, bukan mematikan proses.
          */
-        fun start(context: Context) {
-            val intent = Intent(context, CameraService::class.java).setAction(ACTION_START)
+        fun start(context: Context, fps: Int = DEFAULT_FPS, quality: Int = DEFAULT_QUALITY) {
+            val intent = Intent(context, CameraService::class.java)
+                .setAction(ACTION_START)
+                .putExtra(EXTRA_FPS, fps)
+                .putExtra(EXTRA_QUALITY, quality)
             ContextCompat.startForegroundService(context, intent)
         }
 
-        /** Minta service berhenti. Tidak melakukan apa pun bila belum berjalan. */
+        /**
+         * Minta service berhenti.
+         *
+         * Dipanggil hanya saat aplikasi terlihat: pada Android 8+
+         * `startService` dari latar belakang dilarang.
+         */
         fun stop(context: Context) {
-            val intent = Intent(context, CameraService::class.java).setAction(ACTION_STOP)
-            context.startService(intent)
+            send(context, Intent(context, CameraService::class.java).setAction(ACTION_STOP))
+        }
+
+        /** Tukar kamera depan/belakang tanpa menghentikan stream. */
+        fun switchCamera(context: Context) {
+            send(context, Intent(context, CameraService::class.java).setAction(ACTION_SWITCH_CAMERA))
+        }
+
+        /** Ubah FPS target tanpa menghentikan stream. */
+        fun setFps(context: Context, fps: Int) {
+            send(
+                context,
+                Intent(context, CameraService::class.java)
+                    .setAction(ACTION_SET_FPS)
+                    .putExtra(EXTRA_VALUE, fps)
+            )
+        }
+
+        /** Ubah kualitas JPEG tanpa menghentikan stream. */
+        fun setQuality(context: Context, quality: Int) {
+            send(
+                context,
+                Intent(context, CameraService::class.java)
+                    .setAction(ACTION_SET_QUALITY)
+                    .putExtra(EXTRA_VALUE, quality)
+            )
+        }
+
+        private fun send(context: Context, intent: Intent) {
+            try {
+                context.startService(intent)
+            } catch (e: IllegalStateException) {
+                // Dilarang memulai service dari latar belakang (Android 8+).
+                Log.w(TAG, "Perintah service tidak dapat dikirim: ${e.message}")
+            }
         }
     }
+
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -82,26 +157,88 @@ class CameraService : Service() {
         }
     }
 
+    private lateinit var cameraExecutor: ExecutorService
+    private var cameraProvider: ProcessCameraProvider? = null
+
+    @Volatile
+    private var targetFps = DEFAULT_FPS
+
+    @Volatile
+    private var jpegQuality = DEFAULT_QUALITY
+
+    @Volatile
+    private var useFrontCamera = false
+
+    private var lastFrameTimestamp = 0L
+
+    // H.264 streaming — dipindahkan apa adanya dari MainActivity; WP-31
+    // menghapus jalur ini karena tidak pernah menerima frame.
+    private var streamEncoder: StreamEncoder? = null
+    private var tcpStreamServer: TcpStreamServer? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        cameraExecutor = Executors.newSingleThreadExecutor()
+        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopCamera()
+                MJPEGServerInstance.stop()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
+            ACTION_SWITCH_CAMERA -> {
+                if (MJPEGServerInstance.isRunning()) {
+                    useFrontCamera = !useFrontCamera
+                    Log.i(TAG, "Beralih ke kamera: ${if (useFrontCamera) "depan" else "belakang"}")
+                    bindCameraUseCases()
+                }
+                return START_STICKY
+            }
+
+            ACTION_SET_FPS -> {
+                val value = intent.getIntExtra(EXTRA_VALUE, targetFps)
+                targetFps = value.coerceIn(1, 30)
+                Log.i(TAG, "FPS target: $targetFps")
+                return START_STICKY
+            }
+
+            ACTION_SET_QUALITY -> {
+                val value = intent.getIntExtra(EXTRA_VALUE, jpegQuality)
+                jpegQuality = value.coerceIn(30, 100)
+                Log.i(TAG, "Kualitas JPEG: $jpegQuality")
+                return START_STICKY
+            }
+        }
+
+        intent?.let {
+            if (it.hasExtra(EXTRA_FPS)) targetFps = it.getIntExtra(EXTRA_FPS, targetFps).coerceIn(1, 30)
+            if (it.hasExtra(EXTRA_QUALITY)) {
+                jpegQuality = it.getIntExtra(EXTRA_QUALITY, jpegQuality).coerceIn(30, 100)
+            }
         }
 
         enterForeground()
+
+        if (!MJPEGServerInstance.isRunning()) {
+            startCamera()
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(refreshLoop)
+        stopCamera()
+        cameraExecutor.shutdown()
+        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         super.onDestroy()
     }
 
@@ -137,6 +274,127 @@ class CameraService : Service() {
             stopSelf()
         }
     }
+
+    private fun startCamera() {
+        if (!hasCameraPermission()) {
+            Log.e(TAG, "Izin kamera belum diberikan; kamera tidak dimulai.")
+            MJPEGServerInstance.reportCameraError("camera_permission_missing")
+            return
+        }
+
+        val providerFuture = ProcessCameraProvider.getInstance(this)
+        providerFuture.addListener({
+            try {
+                cameraProvider = providerFuture.get()
+                bindCameraUseCases()
+            } catch (e: Exception) {
+                Log.e(TAG, "Gagal memulai kamera: ${e.message}", e)
+                MJPEGServerInstance.reportCameraError("camera_provider_failed")
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun bindCameraUseCases() {
+        val provider = cameraProvider ?: return
+
+        val imageAnalysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setTargetResolution(Size(1280, 720))
+            .build()
+
+        // H.264 stream encoder
+        val encoder = StreamEncoder()
+        streamEncoder = encoder
+        try {
+            encoder.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal memulai encoder H.264", e)
+            streamEncoder = null
+        }
+
+        imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+            analyze(imageProxy)
+        }
+
+        val cameraSelector =
+            if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+
+        try {
+            provider.unbindAll()
+            provider.bindToLifecycle(this, cameraSelector, imageAnalysis)
+
+            if (!MJPEGServerInstance.isRunning()) {
+                if (MJPEGServerInstance.start(this, DEFAULT_PORT)) {
+                    Log.i(TAG, "Server MJPEG aktif di port ${MJPEGServerInstance.getPort()}")
+                }
+            }
+
+            if (streamEncoder != null) {
+                tcpStreamServer = TcpStreamServer(streamEncoder!!)
+                tcpStreamServer?.start()
+                Log.i(TAG, "Server TCP H.264 aktif di port 8086")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal mengikat kamera: ${e.message}", e)
+            MJPEGServerInstance.reportCameraError("camera_bind_failed")
+        }
+    }
+
+    /**
+     * Enkode satu frame lalu terbitkan.
+     *
+     * Waktu tangkap diambil paling awal, sebelum konversi apa pun, supaya usia
+     * frame tidak lebih muda daripada kenyataan.
+     */
+    private fun analyze(imageProxy: ImageProxy) {
+        if (imageProxy.format != ImageFormat.YUV_420_888 || imageProxy.planes.size < 3) {
+            imageProxy.close()
+            return
+        }
+
+        val capturedAtMs = System.currentTimeMillis()
+        val currentTime = SystemClock.elapsedRealtime()
+        val frameInterval = 1000 / targetFps
+
+        if (currentTime - lastFrameTimestamp < frameInterval) {
+            imageProxy.close()
+            return
+        }
+        lastFrameTimestamp = currentTime
+
+        try {
+            val encoded = FrameEncoder.encode(imageProxy, jpegQuality)
+            if (encoded == null) {
+                // Kegagalan enkode dicatat sebagai alasan pada /status
+                MJPEGServerInstance.reportCameraError("encode_failed")
+            } else {
+                MJPEGServerInstance.publishFrame(
+                    encoded.jpeg, encoded.width, encoded.height, capturedAtMs
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pada analyzer: ${e.message}", e)
+            MJPEGServerInstance.reportCameraError("analyzer_failed")
+        } finally {
+            imageProxy.close()
+        }
+    }
+
+    private fun stopCamera() {
+        tcpStreamServer?.stop()
+        tcpStreamServer = null
+        streamEncoder?.release()
+        streamEncoder = null
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+        Log.i(TAG, "Kamera dihentikan.")
+    }
+
+    private fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

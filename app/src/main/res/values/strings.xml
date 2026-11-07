@@ -1,3 +1,20 @@
 <resources>
     <string name="app_name">CamWasteGreen</string>
+
+    <!-- Status yang ditampilkan Activity. Nilai terukur diisi dari registry service. -->
+    <string name="label_fps_measured">FPS terukur: %1$.1f</string>
+    <string name="label_fps_measured_none">FPS terukur: —</string>
+    <string name="label_quality_level">Kualitas: %1$s</string>
+    <string name="label_stream_url">Stream: http://%1$s:%2$d/video</string>
+    <string name="label_stream_offline">Stream offline</string>
+    <string name="label_preview_hint">Pratinjau ada di alamat stream; tidak ada preview di layar ini.</string>
+    <string name="label_camera_state">Kamera: %1$s, %2$d klien</string>
+    <string name="label_server_stopped">Server berhenti</string>
+    <string name="label_usb_present">USB: %1$s</string>
+    <string name="label_usb_absent">USB: --</string>
+    <string name="quality_high">High</string>
+    <string name="quality_medium">Medium</string>
+    <string name="quality_low">Low</string>
+    <string name="toast_start_stream_first">Mulai stream dulu untuk flip kamera</string>
+    <string name="toast_camera_required">Aplikasi memerlukan izin kamera</string>
 </resources>

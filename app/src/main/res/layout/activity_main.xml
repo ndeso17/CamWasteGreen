@@ -8,11 +8,37 @@
     android:background="@android:color/black"
     android:fitsSystemWindows="true">
 
-    <!-- Full-bleed camera preview -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/previewView"
+    <!--
+        Tidak ada PreviewView: kamera dipegang CameraService, bukan Activity.
+        Panel ini hanya menampilkan status terukur dari registry service.
+    -->
+    <LinearLayout
+        android:id="@+id/previewPlaceholder"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvCameraState"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/label_server_stopped"
+            android:textColor="@color/white"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvPreviewHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/label_preview_hint"
+            android:textColor="@color/white"
+            android:textSize="13sp" />
+    </LinearLayout>
 
     <!-- Floating status chips (Maps-style) -->
     <LinearLayout

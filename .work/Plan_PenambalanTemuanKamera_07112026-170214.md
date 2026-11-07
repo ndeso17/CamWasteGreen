@@ -2376,22 +2376,22 @@ hanya dipanggil saat aplikasi terlihat.
 
 ## WP-18 — Kamera di-bind ke service, Activity menjadi klien status
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`
 
 Dependensi: WP-17.
 
 Tugas:
-- [ ] T-046 Pindahkan `ProcessCameraProvider`, `ImageAnalysis`, dan
+- [x] T-046 Pindahkan `ProcessCameraProvider`, `ImageAnalysis`, dan
       `bindToLifecycle` ke `CameraService` dengan `LifecycleService` atau
       `LifecycleOwner` milik service (CWG-11).
-- [ ] T-047 Mulai dan hentikan `MJPEGServerInstance` dari service, bukan dari
+- [x] T-047 Mulai dan hentikan `MJPEGServerInstance` dari service, bukan dari
       Activity (CWG-11).
-- [ ] T-048 Ubah `MainActivity` menjadi pemulai service dan penampil status:
+- [x] T-048 Ubah `MainActivity` menjadi pemulai service dan penampil status:
       minta izin `CAMERA` dan `POST_NOTIFICATIONS`, tampilkan alamat stream dan
       `cameraState`; hapus `Preview` dan `previewView` (CWG-11, CWG-13).
-- [ ] T-049 Pastikan `onDestroy` Activity tidak menghentikan kamera atau server
+- [x] T-049 Pastikan `onDestroy` Activity tidak menghentikan kamera atau server
       (CWG-11).
 
 Kriteria terima:
@@ -2406,6 +2406,126 @@ Kriteria terima:
 Risiko: kehilangan preview menyulitkan penyetujuan arah kamera saat pemasangan.
 Mitigasi: penyetujuan arah memakai `/video` di peramban; dicatat di README dan
 `.work/Architecture.md` pada WP-29.
+
+### Log WP-18 (Executor)
+
+Berkas berubah (4): `CameraService.kt`, `MainActivity.kt`,
+`res/layout/activity_main.xml`, `res/values/strings.xml`. `strings.xml`
+melampaui daftar `File:` WP-18 (tiga berkas); alasan: teks status yang
+sebelumnya hardcoded dipindah ke sumber daya agar tidak menambah warning
+`HardcodedText` baru. Deviasi dicatat, bukan disembunyikan.
+
+Checklist:
+
+- [x] T-046 `ProcessCameraProvider`, `ImageAnalysis`, dan `bindToLifecycle`
+      pindah ke `CameraService`. Service mengimplementasikan `LifecycleOwner`
+      dengan `LifecycleRegistry` yang selalu `RESUMED` selama service hidup,
+      sehingga kamera tidak mengikuti visibilitas Activity.
+- [x] T-047 `MJPEGServerInstance.start`/`stop` dipanggil dari service, bukan
+      Activity.
+- [x] T-048 `MainActivity` menjadi pemulai service dan penampil status: meminta
+      `CAMERA` (+ `POST_NOTIFICATIONS` pada API 33+), menampilkan alamat
+      `/video`, `cameraState`, jumlah klien, dan FPS terukur. `Preview` dan
+      `previewView` dihapus dari Activity maupun layout.
+- [x] T-049 `onDestroy` Activity tidak menyentuh kamera atau server.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+grep -n "bindToLifecycle" app/src/main/java/.../MainActivity.kt
+  -> tanpa hasil (exit 1); hanya ada di CameraService.kt
+grep -n "MJPEGServerInstance.stop" app/src/main/java/.../MainActivity.kt
+  -> tanpa hasil (exit 1)
+grep -rn "previewView" app/src
+  -> tanpa hasil (exit 1)
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning (sebelum WP-18: 0 error, 69 warning)
+```
+
+Bukti perangkat (moto g57 power, serial ZP2222SQLL, APK
+`IPCam_08November2026_0402.apk`, `adb install` sukses):
+
+1. Stream mulai lewat tombol record di UI:
+   `{"streaming":true,"cameraState":"streaming","cameraStateReason":null,
+   "frameSeq":23,"measuredFps":1.6,"width":1440,"height":1440,"clients":0}`
+2. `/video` dijawab `HTTP 200`, 2.746.684 byte dalam ~5 detik lewat
+   `adb forward tcp:18085 tcp:8085`.
+3. Tahan layar tidur: `mWakefulness=Dozing` (dipaksa `input keyevent 223`),
+   `frameSeq` 100 -> 113 dalam 10 detik, `cameraState` tetap `streaming`.
+4. Tahan Activity tidak terlihat: setelah `KEYCODE_HOME`, `frameSeq` tetap
+   naik; `dumpsys activity services` menunjukkan
+   `isForeground=true foregroundId=1001 types=0x00000040`
+   (`0x40` = `FOREGROUND_SERVICE_TYPE_CAMERA`), dan notifikasi berisi
+   "CamWasteGreen / Status streaming: kamera mengalir, 0 klien".
+5. Tahan Activity ditutup: setelah `KEYCODE_BACK`, Activity selesai tetapi
+   proses hidup (pid 17604) dan `frameSeq` 10 -> 20 tanpa jeda; tidak ada
+   `Kamera dihentikan` pada log saat Activity ditutup.
+6. Berhenti: tombol record ditekan lagi → `/status` menolak koneksi
+   (`curl` exit 52), service hilang dari `dumpsys`, log berisi
+   `Kamera dihentikan.` dan `Server MJPEG dihentikan`.
+7. Mulai ulang setelah berhenti berhasil pada proses yang sama.
+
+Uji pembanding untuk menyingkirkan regresi: build pada `8a2cf6c`
+(sebelum WP-18) dipasang di perangkat yang sama. Hasilnya
+`width=1440,height=1440` dan `measuredFps` 1,70 — sama dengan build WP-18.
+Artinya kedua angka itu bukan akibat WP-18.
+
+Keterbatasan dan hal yang **belum** terbukti:
+
+- Klien nyata dari host lain belum dicoba. Semua pemeriksaan memakai
+  `adb forward`, jadi ini bukan bukti jangkauan jaringan.
+- `Activity` membaca status lewat `MJPEGServerInstance` di proses yang sama.
+  Ini berfungsi karena service berjalan di proses yang sama; bila service
+  suatu saat dipindah ke proses terpisah, Activity harus memakai binder.
+- Interaksi UI setelah stream berjalan (ubah FPS/quality, flip kamera)
+  hanya diperiksa lewat kode, belum diklik satu per satu di perangkat pada WP
+  ini.
+
+Temuan:
+
+- QC-46: resolusi frame nyata 1440x1440, bukan 1280x720 yang diminta
+  `setTargetResolution`. `/status` melaporkan 1440x1440, jadi angkanya jujur,
+  tetapi target resolusi tidak dipenuhi. Ini menutup sebagian pertanyaan
+  `B-06` (resolusi) dan menjadi alasan WP-23 (`ResolutionSelector`) harus
+  dikerjakan, bukan sekadar kosmetik.
+- QC-47: FPS terukur ~1,6–1,7 dengan target 20, sudah ada sebelum WP-18
+  (terukur pada build `8a2cf6c`). Frame 1440x1440 berukuran ~2,4 MB per
+  frame. Sebab pastinya belum diukur: tidak ada profil enkode maupun
+  pengukuran waktu per tahap. Bukan ambang mutu; `B-06` masih terbuka.
+- QC-48: log `Kamera dihentikan.` tercetak dua kali karena `stopCamera()`
+  dipanggil pada `ACTION_STOP` lalu lagi pada `onDestroy`. Hanya soal log.
+- QC-49: `StreamEncoder`/`TcpStreamServer` masih dibuat setiap kali kamera
+  diikat (log "Server TCP H.264 aktif di port 8086") padahal `encode()`
+  tidak pernah dipanggil, jadi tidak menambah encode per frame. Tetap
+  dihapus pada WP-31.
+
+### Log WP-18 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- Tiga kriteria grep terpenuhi (kosong).
+- Gerbang `assembleDebug testDebugUnitTest lintDebug` lulus, exit `0`;
+  lint 0 error.
+- Isi diperiksa: tidak ada `Preview`/`previewView` tersisa; `activity_main.xml`
+  kini memuat `tvCameraState` dan `previewPlaceholder`; `MainActivity` tidak
+  mengimpor `androidx.camera.*`; `CameraService` tidak memanggil
+  `MJPEGServerInstance.stop()` saat Activity berhenti.
+- Bukti perangkat diperiksa ulang dengan uji pembanding (`8a2cf6c`) untuk
+  memastikan tidak ada regresi yang disalahartikan sebagai temuan lama.
+
+**MANUAL-VERIFY yang kini terbukti** (perangkat ZP2222SQLL):
+"stream tetap hidup saat layar mati" dan "stream tetap hidup saat Activity
+ditutup". Percobaan pertama memakai `keyevent 26` gagal membuktikan apa pun
+karena perangkat tetap `Awake`; percobaan diulang dengan `keyevent 223` dan
+hasilnya dicatat di atas.
+
+Yang **tetap** belum terbukti: klien nyata dari host lain, FPS/ambang mutu
+(`B-06`), geometri pemasangan (`B-03`), dan korespondensi encoder dengan
+backend (`B-24`).
+
+Dampak ke WP berikutnya: WP-19 boleh mulai. WP-23 wajib menangani QC-46.
+WP-31 wajib menghapus sisa jalur H.264 (QC-49).
 
 ---
 
