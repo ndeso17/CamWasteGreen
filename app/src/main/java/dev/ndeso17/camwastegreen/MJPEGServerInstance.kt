@@ -2,6 +2,7 @@ package dev.ndeso17.camwastegreen
 
 import android.content.Context
 import android.util.Log
+import dev.ndeso17.camwastegreen.stream.ApiAuth
 import dev.ndeso17.camwastegreen.stream.CameraConfig
 import dev.ndeso17.camwastegreen.stream.FrameSource
 import dev.ndeso17.camwastegreen.stream.MjpegHttpServer
@@ -110,6 +111,11 @@ object MJPEGServerInstance {
             return true
         }
 
+        // Token: nilai pada CameraConfig bila diisi pemanggil, selain itu dari
+        // BuildConfig (dibangun dari local.properties, WP-26). Tidak ada
+        // token yang ditulis di repo ini.
+        val apiKey = config.apiKey.ifEmpty { BuildConfig.API_KEY }
+
         val choice = storedChoice(context)
         val bindAddress = bindAddressFor(choice)
         if (bindAddress == null) {
@@ -125,11 +131,17 @@ object MJPEGServerInstance {
                 bindAddress = bindAddress,
                 port = port,
                 maxClients = config.maxClients,
-                writeTimeoutMs = config.writeTimeoutMs
+                writeTimeoutMs = config.writeTimeoutMs,
+                apiKey = apiKey,
+                allowedAddresses = ApiAuth.parseAddresses(BuildConfig.ALLOWED_ADDRESSES)
             )
             created.start(SOCKET_READ_TIMEOUT_MS, true)
             server = created
             statusRegistry.setCameraState(StatusRegistry.CameraState.STARTING)
+            if (apiKey.isEmpty()) {
+                // Tanpa token, ApiAuth menolak semua permintaan terjaga.
+                Log.w(TAG, "Token API kosong: /video dan /status akan menolak semua permintaan")
+            }
             Log.i(TAG, "Server MJPEG berjalan di $bindAddress:$port")
             true
         } catch (e: Exception) {

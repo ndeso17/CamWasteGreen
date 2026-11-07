@@ -1,5 +1,6 @@
 package dev.ndeso17.camwastegreen.stream
 
+import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Response
@@ -38,7 +39,11 @@ class MjpegHttpServer(
     val bindAddress: String,
     port: Int,
     private val maxClients: Int,
-    private val writeTimeoutMs: Long
+    private val writeTimeoutMs: Long,
+    /** Token statis untuk `/video` dan `/status` (D-27). */
+    private val apiKey: String = "",
+    /** Alamat klien yang diizinkan; kosong berarti tanpa batas alamat. */
+    private val allowedAddresses: Set<String> = emptySet()
 ) : NanoHTTPD(bindAddress, port) {
 
     /** Slot klien bersama; satu instance agar batas berlaku lintas koneksi. */
@@ -70,12 +75,49 @@ class MjpegHttpServer(
     }
 
     override fun serve(session: IHTTPSession?): Response {
-        return when (session?.uri ?: "/") {
+        val uri = session?.uri ?: "/"
+        val protected = uri == PATH_VIDEO || uri == PATH_STATUS
+
+        if (protected && session != null) {
+            val rejection = ApiAuth.authorize(
+                // NanoHTTPD menyimpan nama header dalam huruf kecil.
+                providedKey = session.headers[HEADER_API_KEY.lowercase()],
+                expectedKey = apiKey,
+                remoteAddress = session.remoteIpAddress ?: UNKNOWN_ADDRESS,
+                allowedAddresses = allowedAddresses
+            )
+            if (rejection != ApiAuth.Result.ALLOWED) {
+                // Alamat dan alasan dicatat; token tidak pernah ditulis ke log.
+                Log.w(TAG, "Permintaan $uri ditolak (${rejection.name}) dari ${session.remoteIpAddress}")
+                return unauthorized(rejection)
+            }
+        }
+
+        return when (uri) {
             "/" -> newFixedLengthResponse(Response.Status.OK, "text/html", diagnosticPage())
-            "/video" -> handleVideo()
-            "/status" -> handleStatus()
+            PATH_VIDEO -> handleVideo()
+            PATH_STATUS -> handleStatus()
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found")
         }
+    }
+
+    /** Balasan penolakan: kode alasan saja, tanpa nilai token yang benar. */
+    private fun unauthorized(result: ApiAuth.Result): Response {
+        val body = JSONObject().apply {
+            put("error", JSONObject().apply {
+                put("code", result.name)
+                put("message", messageFor(result))
+            })
+        }.toString()
+        return newFixedLengthResponse(Response.Status.UNAUTHORIZED, "application/json", body)
+    }
+
+    private fun messageFor(result: ApiAuth.Result): String = when (result) {
+        ApiAuth.Result.MISSING_KEY -> "Header $HEADER_API_KEY wajib diisi"
+        ApiAuth.Result.WRONG_KEY -> "Token tidak cocok"
+        ApiAuth.Result.ADDRESS_NOT_ALLOWED -> "Alamat klien tidak diizinkan"
+        ApiAuth.Result.SERVER_MISCONFIGURED -> "Server belum dikonfigurasi dengan token"
+        ApiAuth.Result.ALLOWED -> "Diterima"
     }
 
     private fun handleVideo(): Response {
@@ -209,6 +251,18 @@ class MjpegHttpServer(
     companion object {
         /** Batas part; hanya ASCII agar aman pada klien sederhana. */
         const val BOUNDARY = "camwastegreen"
+
+        private const val TAG = "MjpegHttpServer"
+
+        /** Header token yang dibaca untuk `/video` dan `/status` (D-27). */
+        const val HEADER_API_KEY = "X-Api-Key"
+
+        private const val PATH_VIDEO = "/video"
+
+        private const val PATH_STATUS = "/status"
+
+        /** Alamat cadangan bila sesi tidak memberi alamat klien. */
+        private const val UNKNOWN_ADDRESS = "unknown"
 
         private val CRLF = "\r\n".toByteArray(Charsets.US_ASCII)
 
