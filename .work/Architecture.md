@@ -129,8 +129,8 @@ diketahui, field diisi `null` atau tidak dikirim, bukan `0`.
 ## 9. Yang belum diputuskan
 
 Penandaan waktu dan korespondensi encoder dengan observasi (B-24), geometri
-pemasangan kamera (B-03), ambang FPS dan latensi (B-06), status jalur H.264
-`StreamEncoder` dan `TcpStreamServer` (B-30), serta pengesahan alias `CWG-`.
+pemasangan kamera (B-03), serta ambang FPS dan latensi (B-06).
 
 Bentuk kontrak stream dan model otorisasi sudah ditetapkan pada D-27 dan
-D-29.
+D-29. Jalur H.264 ditetapkan dihapus pada D-30, sehingga MJPEG `/video` adalah
+satu-satunya jalur keluar frame. Namespace alias `CWG-` disahkan pada D-31.

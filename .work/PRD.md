@@ -60,8 +60,9 @@ segmentasi selfie, virtual camera driver, dan integrasi OBS.
 
 ## 4. Kebutuhan fungsional
 
-Namespace `CWG-` dipakai untuk kebutuhan repo ini. Alias ini **belum disahkan**
-pengguna; ratification dicatat di `.work/FINDINGS.md` root.
+Namespace `CWG-` dipakai untuk kebutuhan repo ini dan **disahkan pengguna**
+pada 7 November 2026 (D-31). Bentuk ID tidak boleh diubah tanpa keputusan
+baru; perubahan bentuk wajib dicatat di `.work/DECISIONS.md` root.
 
 ### 4.1 Kamera dan stream
 
@@ -165,10 +166,10 @@ token dapat dibaca bila jaringan disadap; TLS di luar lingkup v1.
 | B-24 | Penandaan waktu frame dan korespondensi encoder dengan observasi | CWG-02 | terbuka; bentuk header ditetapkan di dokumen ini |
 | B-28 | Model otorisasi API | CWG-15 | selesai untuk sisi kamera (D-27, 7 Nov 2026) |
 | B-29 | Bentuk lisensi dan atribusi fork | Packaging repo | selesai (D-28, 7 Nov 2026: MIT) |
-| B-30 | Status jalur H.264 `StreamEncoder` dan `TcpStreamServer` | kebersihan jalur sensor | terbuka |
+| B-30 | Status jalur H.264 `StreamEncoder` dan `TcpStreamServer` | kebersihan jalur sensor | selesai (D-30, 7 Nov 2026: dihapus) |
 | B-03 | Geometri mesin: posisi dan tinggi kamera | CWG-06, CWG-07 | terbuka |
 | B-06 | Ambang FPS dan latensi yang disepakati | CWG-N05 | terbuka |
-| — | Alias ID `CWG-` | traceability | menunggu pengesahan |
+| — | Alias ID `CWG-` | traceability | disahkan (D-31, 7 Nov 2026) |
 
 ## 9. Di luar lingkup
 

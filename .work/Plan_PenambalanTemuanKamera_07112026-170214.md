@@ -6,8 +6,20 @@
 **Sumber permintaan:** instruksi pengguna sesi 7 November 2026 berisi 11 butir
 temuan audit kamera (P0 1–5, P1 6–8, P2 9–11).
 **Keputusan pendukung:** jawaban pengguna pada sesi yang sama — otorisasi token
-statis `X-Api-Key` (B-28), lisensi MIT (B-29), default stream 1280x720 / 20 FPS /
-quality 80 / maks 2 klien (B-21).
+statis `X-Api-Key` (B-28, D-27), lisensi MIT (B-29, D-28), default stream
+1280x720 / 20 FPS / quality 80 / maks 2 klien (B-21, D-29), penghapusan jalur
+H.264 (B-30, D-30), pengesahan namespace alias `CWG-` (D-31).
+
+## Riwayat revisi
+
+| Revisi | Tanggal | Isi | Dasar |
+|---|---|---|---|
+| 1 | 7 Nov 2026 | Rencana awal, WP-01..WP-30 | 11 temuan audit + D-27..D-29 |
+| 2 | 7 Nov 2026 | Tambah WP-31 (hapus jalur H.264), perluas WP-29 T-077 agar `AGENTS.md` tidak lagi mencantumkan B-21/B-28/B-29 sebagai terbuka, perbaiki tag T-002 menjadi `CWG-N01` + `CWG-N02` | D-30, D-31; temuan QC-01 dan QC-04 pada laporan `.work/evidence/QC-WP-01.md` |
+
+Tidak ada WP `done` yang dihapus, dinomori ulang, atau diubah kriterianya.
+WP-01 tetap `done`; revisi ini hanya menambah WP-31 dan memperjelas tugas WP
+yang belum dikerjakan.
 
 ## Context
 
@@ -42,12 +54,13 @@ Termasuk:
 9. `ResolutionSelector` menggantikan `setTargetResolution`.
 10. Test unit untuk header MJPEG, dedupe, FPS terukur, dan otorisasi.
 11. `LICENSE` MIT dan atribusi fork.
+12. Penghapusan jalur H.264 (`StreamEncoder`, `TcpStreamServer`) sesuai D-30.
 
 Tidak termasuk:
 
 - Inferensi, klasifikasi, pemilihan target, pemetaan bak, perintah robot.
-- Jalur H.264 (`StreamEncoder`, `TcpStreamServer`) — status dipensiunkan atau
-  dipertahankan dicatat sebagai `B-30`, tidak diubah rencana ini.
+- Format video selain MJPEG. Jalur H.264 (`StreamEncoder`, `TcpStreamServer`)
+  **dihapus** pada WP-31 sesuai D-30; pengganti format tidak diputuskan.
 - Angka ambang FPS/latensi sebagai kriteria lulus (`B-06` masih terbuka).
 - Uji pada perangkat fisik (tidak ada perangkat; semua butir perangkat
   berstatus `MANUAL-VERIFY`).
@@ -108,7 +121,9 @@ Tugas:
 - [x] T-002 Perbarui registri blocker: B-21, B-28, B-29 menjadi selesai dengan
       rujukan D-27..D-29; tambahkan B-30 (status jalur H.264 `StreamEncoder`
       dan `TcpStreamServer`) sebagai terbuka dengan syarat pembukaan yang jelas
-      (CWG-N02).
+      (CWG-N01, CWG-N02). Tag awal hanya `CWG-N02`; QC-04 mencatat `CWG-N01`
+      (satu kali enkode) lebih tepat, dan tag diperbaiki di sini tanpa mengubah
+      isi tugas.
 - [x] T-003 Sinkronkan `.work/PRD.md` bagian 5 dan 8 serta `.work/Architecture.md`
       bagian 6 dengan keputusan tersebut, tanpa mengubah satu pun ID `CWG-`
       (CWG-01, CWG-15).
@@ -1050,7 +1065,8 @@ Status: todo
 
 File: `.work/evidence/baseline-camwastegreen.md` (baru)
 
-Dependensi: WP-01..WP-27.
+Dependensi: WP-01..WP-27, WP-31 (seluruh WP kode, termasuk penghapusan jalur
+H.264, selesai lebih dulu).
 
 Tugas:
 - [ ] T-075 Jalankan `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`,
@@ -1082,8 +1098,10 @@ Dependensi: WP-28.
 
 Tugas:
 - [ ] T-077 Perbarui `AGENTS.md` repo: struktur baru (`stream/`, `camera/`,
-      `CameraService`, `BootReceiver`), perintah gerbang, dan daftar defek yang
-      sudah tertutup (CWG-N06).
+      `CameraService`, `BootReceiver`), perintah gerbang, daftar defek yang
+      sudah tertutup, serta daftar blocker pada bagian SOURCE OF TRUTH dan
+      OPEN DECISIONS sehingga B-21/B-28/B-29 tidak lagi tercantum sebagai
+      terbuka dan B-30 tercatat selesai (CWG-N06; temuan QC-01 WP-01).
 - [ ] T-078 Perbarui `.work/Structure.md`: hapus entri berkas yang dihapus,
       tambah komponen baru, dan perbarui tabel nasib berkas (CWG-01).
 - [ ] T-079 Perbarui `.work/Architecture.md`: alur frame memakai
@@ -1093,6 +1111,9 @@ Tugas:
 Kriteria terima:
 - `grep -rn "MicManager\|FilterPipeline\|FrameBuffer\|previewView" AGENTS.md .work/Structure.md .work/Architecture.md`
   kosong.
+- `grep -n "B-21\|B-28\|B-29" AGENTS.md` hanya menemukan rujukan yang
+  menyatakan blocker tersebut selesai dengan D-27..D-29, bukan sebagai
+  keputusan terbuka.
 - Setiap komponen pada `.work/Structure.md` bagian 3 memiliki berkas nyata:
   daftar path diperiksa dengan `ls`.
 - Bukti: keluaran grep dan `ls` pada Log WP.
@@ -1131,6 +1152,54 @@ diisi; status awal eksplisit belum diuji.
 
 ---
 
+## WP-31 — Hapus jalur H.264 (`StreamEncoder`, `TcpStreamServer`)
+
+Status: todo
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`,
+`app/src/main/java/dev/ndeso17/camwastegreen/StreamEncoder.kt` (hapus),
+`app/src/main/java/dev/ndeso17/camwastegreen/TcpStreamServer.kt` (hapus)
+
+Dependensi: WP-01 (D-30), WP-18 (kamera pindah ke `CameraService`). B-30
+ditutup oleh D-30.
+
+Urutan eksekusi: **kerjakan WP-31 sebelum WP-28**, meskipun nomornya lebih
+besar. WP-28 adalah gerbang mutu akhir dan dependensinya sudah mencantumkan
+WP-31. Nomor lanjutan dipakai karena WP `done` tidak boleh dinomori ulang.
+
+Tugas:
+- [ ] T-082 Hapus pemanggilan `StreamEncoder` dan `TcpStreamServer` dari
+      `MainActivity.kt`: field `streamEncoder`, `tcpStreamServer`, blok
+      `encoder.start()`, pemanggilan `enc.encode(nv21, ptsUs)`, dan blok
+      penghentian encoder (CWG-N01, CWG-N02).
+- [ ] T-083 Hapus berkas `StreamEncoder.kt` dan `TcpStreamServer.kt`
+      (CWG-N02, D-30).
+- [ ] T-084 Pastikan tidak ada rujukan tersisa ke kedua kelas, dan tidak ada
+      enkode tambahan pada jalur sensor selain satu `compressToJpeg` di
+      `FrameEncoder` (CWG-N01).
+
+Kriteria terima:
+- `grep -rn "StreamEncoder\|TcpStreamServer" app/src` kosong.
+- `grep -c "compressToJpeg\|Bitmap.compress" app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameEncoder.kt`
+  bernilai `1`; pada `MainActivity.kt` bernilai `0`.
+- `./gradlew assembleDebug` dan `./gradlew testDebugUnitTest` lulus.
+- `./gradlew lintDebug` tidak menambah error baru.
+- Bukti: keluaran grep, ringkasan build, dan ukuran APK sebelum/sesudah pada
+  Log WP.
+
+Risiko: `TcpStreamServer` masih dirujuk berkas lain dari upstream sehingga
+build gagal.
+Mitigasi: jalankan `grep -rn "TcpStreamServer\|StreamEncoder" app/` sebelum
+menghapus; bila ada rujukan di luar tiga berkas pada daftar `File:`, hentikan
+WP, catat temuan, dan Planner menambah WP lanjutan.
+
+Risiko: penghapusan tidak mengurangi beban CPU bila `StreamEncoder` ternyata
+aktif pada jalur sensor.
+Mitigasi: tidak diklaim sebagai penghematan terukur; pengukuran beban tetap
+menunggu perangkat dan ambang B-06.
+
+---
+
 ## Traceability Matrix
 
 ### Temuan audit → WP
@@ -1154,6 +1223,7 @@ diisi; status awal eksplisit belum diuji.
 | P2-10 test header dan dedupe | CWG-N06 | WP-06, WP-08, WP-09, WP-10, WP-11, WP-21, WP-25, WP-28 | `testDebugUnitTest` |
 | P2-11 lisensi repo | CWG-N03 | WP-02 | `LICENSE`, `README.md` |
 | P0-2 nomor urut dan waktu tangkap frame (B-24) | CWG-02, CWG-N04 | WP-08, WP-09, WP-14 | `FrameSourceTest` |
+| P1-6 jalur H.264 tidak lagi menambah encode (B-30) | CWG-N01, CWG-N02 | WP-31 | grep `StreamEncoder\|TcpStreamServer` kosong, build |
 
 ### Requirement → WP
 
@@ -1175,7 +1245,7 @@ diisi; status awal eksplisit belum diuji.
 | CWG-14 | WP-03, WP-04, WP-05, WP-20 | grep kosong, lint bersih |
 | CWG-15 | WP-25, WP-26, WP-27 | `ApiAuthTest`, MANUAL-VERIFY 401 |
 | CWG-16 | WP-10, WP-14, WP-24 | `StatusRegistryTest` kasus gagal |
-| CWG-N01 | WP-06, WP-07, WP-14, WP-16 | grep enkode, ukuran APK |
+| CWG-N01 | WP-06, WP-07, WP-14, WP-16, WP-31 | grep enkode, ukuran APK |
 | CWG-N02 | WP-13, WP-15, WP-16 | grep kosong, dependensi dihapus |
 | CWG-N03 | WP-02, WP-26 | `LICENSE`, `git check-ignore` |
 | CWG-N04 | WP-08, WP-14 | `FrameSourceTest` |
@@ -1203,8 +1273,8 @@ Seluruh butir berikut **belum diuji**; tidak ada perangkat pada sesi ini.
 |---|---|---|---|
 | B-03 | Geometri pemasangan kamera (posisi, tinggi, orientasi) belum ditetapkan | WP-20 (nilai orientasi akhir), WP-06 | terbuka; WP memakai nilai konfigurasi dan menandai belum terverifikasi |
 | B-06 | Ambang FPS dan latensi belum disepakati | WP-10, WP-28, WP-30 | terbuka; WP tidak memakai ambang sebagai kriteria lulus |
-| B-30 | Status jalur H.264 (`StreamEncoder`, `TcpStreamServer`): dipensiunkan atau dipertahankan | tidak ada WP pada rencana ini | terbuka (baru, dicatat WP-01) |
-| — | Pengesahan alias `CWG-` | seluruh traceability | terbuka; traceability belum final sampai disahkan |
+| B-30 | Status jalur H.264 (`StreamEncoder`, `TcpStreamServer`): dipensiunkan atau dipertahankan | WP-31 | **selesai** (D-30, 7 Nov 2026: jalur H.264 dihapus) |
+| — | Pengesahan alias `CWG-` | seluruh traceability | **selesai** (D-31, 7 Nov 2026: disahkan) |
 
 ## Planner Notes
 
@@ -1215,9 +1285,10 @@ Seluruh butir berikut **belum diuji**; tidak ada perangkat pada sesi ini.
    `ResolutionSelector` sudah tersedia pada CameraX 1.4.0 yang terpasang.
    Robolectric sengaja tidak ditambahkan; karena itu seluruh test berada pada
    Kotlin murni.
-3. `B-30` sengaja tidak dikerjakan: memensiunkan `StreamEncoder` dan
-   `TcpStreamServer` adalah perubahan lingkup yang butuh keputusan pengguna.
-   Selama belum diputuskan, kedua berkas tetap ada dan tidak dipakai.
+3. `B-30` ditutup oleh D-30: jalur H.264 dihapus pada WP-31. Revisi 1 sempat
+   menundanya karena keputusan pengguna belum ada; revisi 2 memasukkannya ke
+   lingkup. WP-31 bergantung pada WP-18 karena pemanggilan encoder berada di
+   `MainActivity.kt` yang juga dipindahkan ke service pada WP-18.
 4. Paket `gpuimage` belum dihapus pada rencana ini karena penghapusannya
    bergantung pada hasil WP-15. Bila WP-15 gagal karena rujukan `FilterType`,
    Executor wajib membuat temuan dan Planner menambah WP lanjutan, bukan
