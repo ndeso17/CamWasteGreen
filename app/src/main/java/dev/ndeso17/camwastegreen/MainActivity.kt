@@ -1,9 +1,7 @@
 package dev.ndeso17.camwastegreen
 
 import android.Manifest
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -38,7 +36,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDecreaseQuality: Button
     private lateinit var btnMinimize: ImageButton
     private lateinit var btnSwitchCamera: ImageButton
-    private lateinit var btnOrientationLock: ImageButton
     private lateinit var tvUsbStatus: TextView
     private lateinit var tvCameraState: TextView
     private lateinit var controlPanel: LinearLayout
@@ -46,7 +43,6 @@ class MainActivity : AppCompatActivity() {
 
     private var currentFps = 20
     private var currentQuality = 80
-    private var isOrientationLocked = false
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -122,7 +118,6 @@ class MainActivity : AppCompatActivity() {
         btnMinimize = findViewById(R.id.btnTogglePanel)
         controlPanel = findViewById(R.id.controlPanel)
         btnSwitchCamera = findViewById(R.id.btnSwitchCamera)
-        btnOrientationLock = findViewById(R.id.btnOrientationLock)
         tvUsbStatus = findViewById(R.id.tvUsbStatus)
         tvCameraState = findViewById(R.id.tvCameraState)
     }
@@ -174,20 +169,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, R.string.toast_start_stream_first, Toast.LENGTH_SHORT).show()
             }
-        }
-
-        btnOrientationLock.setOnClickListener {
-            isOrientationLocked = !isOrientationLocked
-            if (isOrientationLocked) {
-                requestedOrientation =
-                    if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    else
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            } else {
-                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
-            updateUI()
         }
 
         btnIncreaseFps.setOnClickListener {
@@ -262,9 +243,6 @@ class MainActivity : AppCompatActivity() {
         btnDecreaseQuality.isEnabled = running
         btnSwitchCamera.isEnabled = running
 
-        btnOrientationLock.setImageResource(
-            if (isOrientationLocked) R.drawable.ic_rotate_locked else R.drawable.ic_rotate
-        )
     }
 
     /** Label tingkat kualitas. Ini nilai target, bukan pengukuran. */

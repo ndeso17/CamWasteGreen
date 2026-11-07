@@ -2677,18 +2677,18 @@ Stream tetap bisa dimulai dari UI seperti pada WP-18.
 
 ## WP-20 — Orientasi tetap dan hapus izin yang tidak dipakai
 
-Status: todo
+Status: qc
 
-File: `app/src/main/AndroidManifest.xml`
+File: `app/src/main/AndroidManifest.xml`, `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`, `app/src/main/res/drawable/ic_rotate.xml` (dihapus), `app/src/main/res/drawable/ic_rotate_locked.xml` (dihapus)
 
 Dependensi: WP-18.
 
 Tugas:
-- [ ] T-052 Ganti `android:screenOrientation="fullSensor"` menjadi orientasi
+- [x] T-052 Ganti `android:screenOrientation="fullSensor"` menjadi orientasi
       tetap `portrait` pada `MainActivity` (CWG-06).
-- [ ] T-053 Hapus `SYSTEM_ALERT_WINDOW` yang tidak dipakai kode mana pun
+- [x] T-053 Hapus `SYSTEM_ALERT_WINDOW` yang tidak dipakai kode mana pun
       (CWG-14).
-- [ ] T-054 Catat di Log bahwa nilai orientasi akhir bergantung pada geometri
+- [x] T-054 Catat di Log bahwa nilai orientasi akhir bergantung pada geometri
       pemasangan `B-03`, dan rotasi frame keluar ditentukan `CameraConfig`
       (CWG-06).
 
@@ -2702,6 +2702,122 @@ Kriteria terima:
 Risiko: orientasi `portrait` salah untuk kamera yang dipasang menyamping.
 Mitigasi: rotasi piksel ditangani konfigurasi (WP-21) sehingga manifest bukan
 satu-satunya penentu; nilai akhir menunggu B-03.
+
+### Log WP-20 (Executor)
+
+Berkas berubah (5): `AndroidManifest.xml`, `MainActivity.kt`,
+`activity_main.xml`, serta dua drawable yang dihapus (`ic_rotate.xml`,
+`ic_rotate_locked.xml`).
+
+**Deviasi daftar berkas.** WP-20 semula hanya menyebut manifest. Saat
+dikerjakan ditemukan bahwa `btnOrientationLock` di `MainActivity` menyetel
+`requestedOrientation` ke `SCREEN_ORIENTATION_UNSPECIFIED` (saat dilepas) dan
+`SENSOR_LANDSCAPE`/`SENSOR_PORTRAIT` (saat dikunci). Artinya orientasi tetap
+bisa dilepas operator dari UI, sehingga `CWG-06` tidak akan benar-benar
+berlaku meski manifest sudah `portrait`. Tombol itu dihapus, bukan sekadar
+dibiarkan: mengunci manifest tanpa menghapus jalur runtime hanya memindahkan
+masalah. Dua drawable ikonnya menjadi yatim dan ikut dihapus. Perubahan tetap
+dalam batas 5 berkas.
+
+Checklist:
+
+- [x] T-052 `android:screenOrientation="fullSensor"` diganti `"portrait"`
+      pada `MainActivity`.
+- [x] T-053 `SYSTEM_ALERT_WINDOW` dihapus dari manifest setelah dipastikan
+      tidak ada rujukan `SYSTEM_ALERT_WINDOW`, `TYPE_APPLICATION_OVERLAY`,
+      atau `WindowManager.LayoutParams` di seluruh `app/src`.
+- [x] T-054 Batas orientasi dicatat di sini: nilai `portrait` adalah pilihan
+      awal, bukan hasil pengukuran geometri. `B-03` tetap terbuka dan
+      menentukan orientasi akhir pemasangan. Rotasi piksel frame keluar
+      ditentukan `CameraConfig` (WP-21) lewat `image.imageInfo.rotationDegrees`
+      di `FrameEncoder`, sehingga manifest hanya mengatur UI, bukan isi frame.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+grep -n "screenOrientation" app/src/main/AndroidManifest.xml
+  35:            android:screenOrientation="portrait"
+
+grep -n "SYSTEM_ALERT_WINDOW" app/src/main/AndroidManifest.xml
+  (kosong, exit 1)
+
+grep -rn "requestedOrientation|setRequestedOrientation|SCREEN_ORIENTATION" app/src --include=*.kt
+  (kosong, exit 1)
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning
+```
+
+Perubahan komposisi warning (diukur dengan `lintDebug` pada stash dan pada
+pohon kerja, bukan ditebak):
+
+```text
+HardcodedText: 15 -> 14            (label "Lock orientation" hilang bersama tombol)
+LockedOrientationActivity: 0 -> 1  (baru, akibat portrait)
+DiscouragedApi: 0 -> 1             (baru, akibat portrait)
+total warning: 63 -> 63
+```
+
+Dua warning baru itu **konsekuensi langsung** dari `CWG-06`, bukan regresi
+tak terkait. `LockedOrientationActivity` menyarankan `unspecified`/`fullSensor`
+agar aplikasi nyaman di Chrome OS; saran itu bertentangan dengan kebutuhan
+kamera statis, jadi dibiarkan. `DiscouragedApi` memperingatkan bahwa orientasi
+tetap diabaikan pada Android 16+ pada sebagian kasus. Peringatan kedua ini
+penting dan belum bisa ditutup: perangkat uji berjalan Android 16.
+
+Bukti perangkat (moto g57 power, `ZP2222SQLL`, Android 16, APK dipasang ulang
+setelah perubahan):
+
+```text
+dumpsys activity activities
+  49:      manifest-orientation=SCREEN_ORIENTATION_PORTRAIT
+  ResolvedOverrideConfiguration={0.0 ... port ...}
+```
+
+Percobaan membuktikan rotasi paksa **tidak berhasil** dan tidak boleh
+diklaim:
+
+```text
+settings put system user_rotation 1        -> mDisplayRotation=ROTATION_0
+cmd window user-rotation lock 1            -> mDisplayRotation=ROTATION_0
+mLastOrientation=1                          (permintaan tercatat, rotasi tidak)
+```
+
+Jadi `mDisplayRotation` tetap `ROTATION_0` sepanjang percobaan. Penyebab yang
+paling mungkin: perangkat ini mengunci rotasi pada tingkat display (ponsel
+biasa, bukan tablet/foldable), sehingga rotasi 90 tidak pernah tercapai dan
+kondisi uji tidak terpenuhi. Ini **bukan** bukti bahwa `portrait` bekerja;
+yang terbukti hanya bahwa manifest terbaca `SCREEN_ORIENTATION_PORTRAIT` dan
+konfigurasi aktivitas berjalan `port`.
+
+MANUAL-VERIFY yang masih terbuka:
+
+- Rotasi paksa ke landscape dengan perangkat yang benar-benar dapat berputar,
+  lalu memastikan UI tetap `port`. Belum dijalankan.
+- Rotasi piksel frame keluar sesuai pemasangan nyata (`B-03`). Belum dapat
+  diuji karena geometri pemasangan belum ditetapkan.
+- `DiscouragedApi`: perilaku orientasi tetap pada Android 16 perlu diuji pada
+  perangkat yang bisa berputar sebelum `CWG-06` dinyatakan terpenuhi penuh.
+
+### Log WP-20 (QC)
+
+Verdict: **PASS untuk kriteria tertulis**, diperiksa sendiri oleh Executor;
+belum ada QC independen. Status dicatat `qc`, bukan `done`.
+
+- Ketiga kriteria terima terpenuhi dengan keluaran mentah di atas.
+- Gerbang lulus `exit 0`, lint 0 error.
+- Dua warning baru dijelaskan sebabnya dan tidak disembunyikan.
+- MANUAL-VERIFY rotasi belum terpenuhi; dicatat terbuka dan tidak dihitung
+  sebagai lulus.
+
+Temuan:
+
+- QC-52: `portrait` di manifest memicu `DiscouragedApi` — lint menyatakan
+  orientasi tetap "ignored in most cases" mulai Android 16. Perangkat uji
+  berjalan Android 16, dan rotasi paksa tidak dapat dicapai di sana, sehingga
+  `CWG-06` belum terbukti pada API tersebut. Perlu keputusan Planner: cukup
+  mengandalkan rotasi piksel di `CameraConfig` (WP-21) sebagai penjamin
+  orientasi frame, atau menambah penanganan UI untuk Android 16+.
 
 ---
 

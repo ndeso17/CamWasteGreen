@@ -154,16 +154,11 @@
                     android:scaleType="centerInside"
                     android:padding="8dp" />
 
-                <ImageButton
-                    android:id="@+id/btnOrientationLock"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="4dp"
-                    android:background="@drawable/bg_btn_secondary"
-                    android:src="@drawable/ic_rotate"
-                    android:contentDescription="Lock orientation"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
+                <!--
+                    Tombol kunci orientasi dihapus pada WP-20. Ia menyetel
+                    SCREEN_ORIENTATION_UNSPECIFIED/SENSOR_* saat runtime,
+                    sehingga orientasi tetap (CWG-06) bisa dilepas operator.
+                -->
             </LinearLayout>
 
             <!-- Centered shutter -->
