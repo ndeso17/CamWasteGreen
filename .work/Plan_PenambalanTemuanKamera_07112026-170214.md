@@ -1544,22 +1544,22 @@ WP-18 wajib meng-set `cameraState` pada saat kamera berhenti.
 
 ## WP-11 — `StreamSession` untuk dedupe, batas klien, dan batas waktu tulis
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamSession.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/StreamSessionTest.kt` (baru)
 
 Dependensi: WP-08, WP-10.
 
 Tugas:
-- [ ] T-026 Implementasikan penjaga dedupe: `shouldSend(packet): Boolean` yang
+- [x] T-026 Implementasikan penjaga dedupe: `shouldSend(packet): Boolean` yang
       menolak paket dengan `seq` sama atau lebih kecil daripada `lastSentSeq`
       (CWG-03).
-- [ ] T-027 Implementasikan batas klien: `tryAcquire(): Boolean` dan `release()`,
+- [x] T-027 Implementasikan batas klien: `tryAcquire(): Boolean` dan `release()`,
       menolak ketika jumlah aktif mencapai `maxClients` (CWG-10).
-- [ ] T-028 Implementasikan konfigurasi batas waktu tulis dan penanda klien
+- [x] T-028 Implementasikan konfigurasi batas waktu tulis dan penanda klien
       lambat sebagai nilai yang dapat diperiksa, tanpa bergantung pada `android.*`
       (CWG-09).
-- [ ] T-029 Unit test: paket `seq` sama tidak dikirim dua kali, klien ketiga
+- [x] T-029 Unit test: paket `seq` sama tidak dikirim dua kali, klien ketiga
       ditolak saat batas 2, `release` mengembalikan slot, dan penanda klien
       lambat aktif setelah batas waktu lewat (CWG-03, CWG-09, CWG-10).
 
@@ -1573,6 +1573,107 @@ Kriteria terima:
 Risiko: batas waktu tulis tidak dapat ditegakkan pada `PipedOutputStream`.
 Mitigasi: sesi menandai klien lambat dan pemanggil (WP-12) menutup pipa klien
 tersebut; perilaku nyata diverifikasi MANUAL-VERIFY.
+
+### Log WP-11 (Executor)
+
+Berkas berubah (2, sesuai daftar WP): `stream/StreamSession.kt` (baru),
+`app/src/test/.../stream/StreamSessionTest.kt` (baru).
+
+Checklist:
+
+- [x] T-026 `shouldSend(packet)` mengembalikan `true` hanya bila `seq` lebih
+      besar dari `lastSentSeq`; paket dengan `seq` sama atau lebih kecil
+      ditolak. `onPacketSent` memisahkan "boleh kirim" dari "sudah terkirim",
+      sehingga penulisan yang gagal tidak memajukan penanda.
+- [x] T-027 `tryAcquire()` menolak saat `activeClients >= maxClients`;
+      `release()` mengembalikan slot dan mengembalikan `false` bila tidak ada
+      slot aktif.
+- [x] T-028 `writeTimeoutMs` dan `isSlowClient` tersedia tanpa `android.*`.
+      `onWriteStarted()`/`onWriteFinished()` mengukur selang tulis dan menandai
+      klien lambat bila selang **lebih besar** dari batas (tepat sama dengan
+      batas tidak ditandai).
+- [x] T-029 Dua belas kasus test: seq sama tidak dikirim ulang, seq lebih kecil
+      ditolak, penanda seq tidak turun, klien ketiga ditolak saat batas dua,
+      `release` mengembalikan slot, `release` tanpa slot mengembalikan `false`,
+      penanda lambat aktif setelah batas, tepat pada batas tidak ditandai,
+      `release` membersihkan penanda, awal sesi belum mengirim apa pun,
+      `maxClients = 0` ditolak, `writeTimeoutMs = 0` ditolak.
+
+Output pemeriksaan (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "...StreamSessionTest"
+  -> exit 0, tests="12" skipped="0" failures="0"
+grep -c "import android" .../StreamSession.kt -> 0
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Mutasi wajib dari kriteria terima (dedupe `>` menjadi `>=`):
+
+```text
+  -> exit 1, paketDenganSeqSamaTidakDikirimDuaKali FAILED
+  -> exit 1, paketDenganSeqLebihKecilJugaDitolak FAILED
+berkas dikembalikan
+```
+
+Mutasi tambahan (batas klien dimatikan dengan `if (false)`):
+
+```text
+  -> exit 1, klienKetigaDitolakSaatBatasDua FAILED
+  -> exit 1, releaseMengembalikanSlot FAILED
+berkas dikembalikan; grep "packet.seq > last" -> 2, "activeClients >= maxClients" -> 1
+```
+
+Kriteria terima terpenuhi: dua belas kasus lulus, mutasi `>=` menggagalkan
+test dedupe, mutasi batas klien menggagalkan test batas klien.
+
+Deviasi: `StreamSession` menambah `lastSeqSent`, `onPacketSent`,
+`onWriteStarted`, `onWriteFinished`, dan `release(): Boolean`. Alasan:
+kriteria menerima meminta "penanda klien lambat sebagai nilai yang dapat
+diperiksa", yang menuntut pemisahan mulai/selesai tulis dan pencatatan
+pengiriman. Tidak menambah dependensi.
+
+Keterbatasan:
+
+- Batas waktu tulis hanya **penanda**, bukan penghentian paksa. Penutupan pipa
+  dilakukan WP-12; kalau WP-12 tidak menutup, klien lambat tetap menahan slot.
+- Satu `StreamSession` mewakili satu klien; batas `maxClients` lintas klien
+  harus memakai satu instance bersama. Ini harus dipastikan WP-12.
+- Perilaku nyata dengan klien lambat belum diuji; masuk MANUAL-VERIFY.
+
+### Log WP-11 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc` sampai QC independen
+memutuskan `done`.
+
+- `./gradlew testDebugUnitTest --tests "...StreamSessionTest"` → exit `0`,
+  `tests="12" skipped="0" failures="0"`.
+- `grep -c "import android" .../StreamSession.kt` → `0`.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Mutasi diulang QC sendiri: `>` → `>=` menggagalkan dua test; batas klien
+  dimatikan menggagalkan dua test; berkas dikembalikan dan diverifikasi
+  dengan `grep`.
+- Isi berkas diperiksa: `shouldSend` hanya membaca `lastSentSeq` dan tidak
+  memajukannya; `onPacketSent` menolak memundurkan `seq`; `release` tidak
+  pernah membuat `activeClients` negatif; `onWriteFinished` memakai
+  perbandingan ketat sehingga tepat pada batas tidak ditandai.
+
+Temuan (note, tidak menahan):
+
+- QC-32: `writeStartedAtMs` diset ulang setiap `onWriteStarted`, sehingga
+  penulisan yang tidak pernah selesai tidak akan pernah ditandai lambat.
+  Penanganan waktu tunggu sebenarnya harus di sisi penulisan (WP-12). Dicatat
+  agar WP-12 tidak bergantung pada penanda ini untuk menghentikan tulis yang
+  menggantung.
+- QC-33: `clients` dan `lastSeqSent` dibaca tanpa kunci pada `get()`, tetapi
+  keduanya di dalam `synchronized(lock)`. Sudah benar; dicatat agar tidak
+  "diperbaiki" menjadi akses tanpa kunci.
+
+Dampak ke WP berikutnya: WP-12 memakai satu `StreamSession` bersama untuk
+`maxClients`, satu instance per klien untuk dedupe, serta menutup pipa klien
+yang `isSlowClient`.
 
 ---
 
