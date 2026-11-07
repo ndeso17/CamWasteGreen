@@ -109,12 +109,25 @@ pengguna; ratification dicatat di `.work/FINDINGS.md` root.
 | Jalur status | `/status` (JSON) |
 | Batas multipart | `frame` |
 | Header per part | `Content-Type`, `Content-Length`, `X-Frame-Seq`, `X-Frame-Captured-At-Ms`, `X-Frame-Width`, `X-Frame-Height` |
+| Header permintaan | `X-Api-Key` wajib pada `/video` dan `/status` |
+| Port | 8085 |
+| Resolusi default | 1280x720 |
+| FPS default | 20 |
+| Quality JPEG default | 80 |
+| Klien aktif maksimum | 2 |
 
 Header `X-Frame-Seq` dan `X-Frame-Captured-At-Ms` adalah bentuk kontrak untuk
 **B-24** (penandaan waktu frame) yang belum ditutup sebelum app ini dibangun.
 
-Detail lengkap (resolusi, FPS, autentikasi, ketahanan) masih **terblokir B-21**
-dan **B-28**. Nilai di atas adalah bentuk kontrak, bukan angka operasional.
+Nilai default di atas ditetapkan D-29 (7 November 2026) sebagai **default
+konfigurasi**, bukan ambang kelulusan mutu. Ambang FPS, latensi, dan bandwidth
+tetap menunggu B-06 dan pengukuran pada perangkat sasaran.
+
+Bentuk otorisasi ditetapkan D-27 (7 November 2026): token statis pada header
+`X-Api-Key`, dibaca dari berkas di luar repo, dibandingkan dengan waktu tetap,
+dengan pembatasan alamat sebagai lapis kedua opsional. Penolakan membalas `401`
+dan dicatat pada log aplikasi. Kelemahan yang diketahui: HTTP cleartext membuat
+token dapat dibaca bila jaringan disadap; TLS di luar lingkup v1.
 
 ## 6. Skenario penerimaan
 
@@ -148,10 +161,11 @@ dan **B-28**. Nilai di atas adalah bentuk kontrak, bukan angka operasional.
 
 | ID | Masalah | Menahan | Status |
 |---|---|---|---|
-| B-21 | Kontrak stream lengkap: URL, path, resolusi, FPS, autentikasi, ketahanan | CWG-01, CWG-08, CWG-15 | terbuka |
+| B-21 | Kontrak stream: URL, path, resolusi, FPS, autentikasi, ketahanan | CWG-01, CWG-08, CWG-15 | selesai (D-27, D-29, 7 Nov 2026) |
 | B-24 | Penandaan waktu frame dan korespondensi encoder dengan observasi | CWG-02 | terbuka; bentuk header ditetapkan di dokumen ini |
-| B-28 | Model otorisasi API | CWG-15 | terbuka |
-| B-29 | Bentuk lisensi dan atribusi fork | Packaging repo | terbuka |
+| B-28 | Model otorisasi API | CWG-15 | selesai untuk sisi kamera (D-27, 7 Nov 2026) |
+| B-29 | Bentuk lisensi dan atribusi fork | Packaging repo | selesai (D-28, 7 Nov 2026: MIT) |
+| B-30 | Status jalur H.264 `StreamEncoder` dan `TcpStreamServer` | kebersihan jalur sensor | terbuka |
 | B-03 | Geometri mesin: posisi dan tinggi kamera | CWG-06, CWG-07 | terbuka |
 | B-06 | Ambang FPS dan latensi yang disepakati | CWG-N05 | terbuka |
 | — | Alias ID `CWG-` | traceability | menunggu pengesahan |

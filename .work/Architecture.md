@@ -94,9 +94,16 @@ Tidak ada izin `RECORD_AUDIO`. Mikrofon tidak ada di jalur sensor.
 | Aspek | Nilai |
 |---|---|
 | Jaringan | Server hanya mendengarkan pada antarmuka LAN; tidak ada tunneling ke internet |
-| Akses | Bentuk final tertahan B-28. Sebelum itu server menolak akses dari luar jaringan ruang kontrol dan mencatat penolakan |
-| Rahasia | Token dan konfigurasi berada pada berkas di luar repo |
+| Akses | Token statis pada header `X-Api-Key` untuk `/video` dan `/status` (D-27). Pembatasan alamat IP sebagai lapis kedua opsional. Penolakan dibalas `401` dan dicatat |
+| Rahasia | Token, kunci, dan konfigurasi berada pada berkas di luar repo (`local.properties`), diteruskan ke `BuildConfig` saat build |
 | Perintah robot | Tidak ada endpoint yang meneruskan perintah ke ESP32-S3 |
+
+Kelemahan yang diketahui: HTTP cleartext pada jaringan ruang kontrol membuat
+token dapat dibaca bila jaringan disadap. Mitigasi sementara adalah pembatasan
+jaringan dan rotasi token; TLS di luar lingkup v1.
+
+Konfigurasi default (D-29): 1280x720, 20 FPS, quality JPEG 80, klien aktif
+maksimum 2, port 8085. Angka itu default konfigurasi, bukan ambang mutu.
 
 ## 7. Kegagalan dan pemulihan
 
@@ -121,6 +128,9 @@ diketahui, field diisi `null` atau tidak dikirim, bukan `0`.
 
 ## 9. Yang belum diputuskan
 
-Kontrak stream lengkap (B-21), penandaan waktu dan korespondensi encoder
-(B-24), model otorisasi (B-28), bentuk lisensi (B-29), geometri pemasangan
-kamera (B-03), ambang FPS dan latensi (B-06).
+Penandaan waktu dan korespondensi encoder dengan observasi (B-24), geometri
+pemasangan kamera (B-03), ambang FPS dan latensi (B-06), status jalur H.264
+`StreamEncoder` dan `TcpStreamServer` (B-30), serta pengesahan alias `CWG-`.
+
+Bentuk kontrak stream dan model otorisasi sudah ditetapkan pada D-27 dan
+D-29.
