@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.graphics.ImageFormat
 import android.util.Size
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -32,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import dev.ndeso17.camwastegreen.camera.CameraTuning
 import dev.ndeso17.camwastegreen.stream.CameraConfig
 import dev.ndeso17.camwastegreen.stream.FrameEncoder
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
@@ -90,6 +92,13 @@ class CameraService : Service(), LifecycleOwner {
 
         /** Alasan yang muncul pada `cameraStateReason` bila foreground gagal. */
         private const val REASON_FOREGROUND_FAILED = "foreground_start_failed"
+
+        /**
+         * Jumlah frame sebelum kunci AE/AWB/AF dipasang. Nilai ini adalah
+         * jumlah frame warmup, bukan ambang mutu: ia hanya memberi waktu
+         * kontrol otomatis menyesuaikan diri sebelum dibekukan.
+         */
+        private const val WARMUP_FRAMES = 30
 
         /**
          * Mulai [CameraService] sebagai foreground service.
@@ -187,6 +196,15 @@ class CameraService : Service(), LifecycleOwner {
     private var useFrontCamera = false
 
     private var lastFrameTimestamp = 0L
+
+    /** Kamera yang sedang terikat; `null` bila belum/tidak terikat. */
+    private var boundCamera: Camera? = null
+
+    /** Jumlah frame yang sudah terbit sejak kamera terikat (penghitung warmup). */
+    private var framesSinceBind = 0
+
+    /** Kunci AE/AWB/AF hanya diminta sekali per ikatan kamera. */
+    private var tuningRequested = false
 
     // H.264 streaming — dipindahkan apa adanya dari MainActivity; WP-31
     // menghapus jalur ini karena tidak pernah menerima frame.
@@ -358,7 +376,10 @@ class CameraService : Service(), LifecycleOwner {
 
         try {
             provider.unbindAll()
-            provider.bindToLifecycle(this, cameraSelector, imageAnalysis)
+            boundCamera = provider.bindToLifecycle(this, cameraSelector, imageAnalysis)
+            framesSinceBind = 0
+            tuningRequested = false
+            MJPEGServerInstance.setTuningState(CameraTuning.STATE_PENDING)
 
             if (!MJPEGServerInstance.isRunning()) {
                 if (MJPEGServerInstance.start(this, config)) {
@@ -374,6 +395,23 @@ class CameraService : Service(), LifecycleOwner {
         } catch (e: Exception) {
             Log.e(TAG, "Gagal mengikat kamera: ${e.message}", e)
             MJPEGServerInstance.reportCameraError("camera_bind_failed")
+        }
+    }
+
+    /**
+     * Minta kunci AE/AWB/AF setelah frame warmup terbit.
+     *
+     * Dipanggil dari thread analyzer; penghitungnya hanya disentuh dari thread
+     * yang sama, sehingga tidak perlu sinkronisasi tambahan.
+     */
+    private fun maybeLockTuning() {
+        framesSinceBind++
+        if (tuningRequested || framesSinceBind < WARMUP_FRAMES) return
+        val camera = boundCamera ?: return
+        tuningRequested = true
+        CameraTuning.lock(camera, ContextCompat.getMainExecutor(this)) { state ->
+            Log.i(TAG, "Status kunci AE/AWB/AF: $state")
+            MJPEGServerInstance.setTuningState(state)
         }
     }
 
@@ -408,6 +446,7 @@ class CameraService : Service(), LifecycleOwner {
                 MJPEGServerInstance.publishFrame(
                     encoded.jpeg, encoded.width, encoded.height, capturedAtMs
                 )
+                maybeLockTuning()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error pada analyzer: ${e.message}", e)

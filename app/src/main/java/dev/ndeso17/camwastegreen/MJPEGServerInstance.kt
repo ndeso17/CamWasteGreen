@@ -170,6 +170,11 @@ object MJPEGServerInstance {
         server?.notifyFrameAvailable()
     }
 
+    /** Catat status kunci AE/AWB/AF agar `/status` melaporkannya (WP-24). */
+    fun setTuningState(state: String) {
+        statusRegistry.setTuningState(state)
+    }
+
     /** Catat kegagalan kamera agar `/status` melaporkan alasannya. */
     fun reportCameraError(reason: String) {
         statusRegistry.setCameraState(StatusRegistry.CameraState.ERROR, reason)

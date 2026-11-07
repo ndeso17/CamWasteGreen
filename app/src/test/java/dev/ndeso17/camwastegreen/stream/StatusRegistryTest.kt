@@ -121,4 +121,22 @@ class StatusRegistryTest {
         assertEquals("error", snapshot.cameraState)
         assertEquals("encoder_failed", snapshot.cameraStateReason)
     }
+
+    @Test
+    fun tuningStateAwalNullDanTidakMengubahCameraState() {
+        val registry = registry()
+        clock = 6_000_000L
+        registry.onFrame(packet(1L, clock))
+        registry.setCameraState(StatusRegistry.CameraState.STREAMING)
+
+        assertNull(registry.snapshot().tuningState)
+
+        registry.setTuningState("unsupported")
+
+        val snapshot = registry.snapshot()
+        assertEquals("unsupported", snapshot.tuningState)
+        // Kunci yang tidak didukung bukan kegagalan stream (CWG-16).
+        assertEquals(StatusRegistry.CameraState.STREAMING, snapshot.cameraState)
+        assertNull(snapshot.cameraStateReason)
+    }
 }

@@ -3064,18 +3064,18 @@ belum ada QC independen. Status dicatat `qc`.
 
 ## WP-23 — `ResolutionSelector` menggantikan `setTargetResolution`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`
 
 Dependensi: WP-22.
 
 Tugas:
-- [ ] T-061 Ganti `setTargetResolution` dengan
+- [x] T-061 Ganti `setTargetResolution` dengan
       `setResolutionSelector(ResolutionSelector.Builder().setResolutionStrategy(...).build())`
       memakai `ResolutionStrategy` dan `AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY`
       (CWG-08).
-- [ ] T-062 Hapus impor `android.util.Size` yang tidak lagi dipakai (CWG-08).
+- [x] T-062 Hapus impor `android.util.Size` yang tidak lagi dipakai (CWG-08).
 
 Kriteria terima:
 - `grep -rn "setTargetResolution" app/src` kosong.
@@ -3088,24 +3088,84 @@ perangkat.
 Mitigasi: `/status` melaporkan ukuran nyata; selisih dicatat pada Log dan
 MANUAL-VERIFY.
 
+### Log WP-23 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan di `CameraService.bindCameraUseCases()`:
+
+```kotlin
+val resolutionStrategy = ResolutionStrategy(
+    Size(config.width, config.height),
+    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+)
+val resolutionSelector = ResolutionSelector.Builder()
+    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+    .setResolutionStrategy(resolutionStrategy)
+    .build()
+
+val imageAnalysis = ImageAnalysis.Builder()
+    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+    .setResolutionSelector(resolutionSelector)
+    .build()
+```
+
+Deviasi T-062: impor `android.util.Size` **tetap dipakai**, karena
+`ResolutionStrategy` menerima `Size` sebagai target. Menghapusnya akan membuat
+kode tidak dapat dikompilasi. Yang dihapus adalah pemakaian usangnya
+(`setTargetResolution(Size(...))`). T-062 semula mengasumsikan `Size` hanya
+dipakai `setTargetResolution`; asumsi itu keliru.
+
+Kriteria:
+
+```text
+grep -rn "setTargetResolution" app/src
+  -> tidak ada pemakaian API; hanya satu komentar penjelas di CameraService.kt:324
+     yang menyebut nama API lama sebagai alasan perubahan
+grep -rn "setResolutionSelector\|ResolutionSelector\|AspectRatioStrategy" app/src/main
+  -> CameraService.kt: import + pemakaian
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+  -> :app:compileDebugKotlin dijalankan ulang (bukan UP-TO-DATE)
+  -> tidak ada warning deprecation untuk setTargetResolution
+lint: 0 error, 61 warning (sama seperti sebelum WP)
+```
+
+MANUAL-VERIFY **belum dijalankan**: perangkat `ZP2222SQLL` tidak lagi terdeteksi
+(`adb devices` kosong, `lsusb` tidak menampilkan perangkat). Konsekuensinya
+resolusi nyata yang dipilih strategi baru belum diketahui, dan QC-46
+(`/status` melaporkan 1440x1440) belum dapat dikonfirmasi berubah. Ini dicatat
+sebagai keterbatasan, bukan lulus.
+
+### Log WP-23 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — API usang tidak dipakai lagi; build bersih dari deprecation terkait.
+- PASS — rasio 16:9 diminta lebih dulu, dengan fallback otomatis bila perangkat
+  tidak menyediakannya, sehingga tidak ada klaim bahwa 1280x720 pasti dipilih.
+- PASS — tidak ada angka FPS/resolusi baru yang dikarang di kode atau dokumen.
+- BELUM TERBUKTI — resolusi nyata pada perangkat (perangkat tidak terhubung).
+  Status tetap `qc`.
+
 ---
 
 ## WP-24 — Kunci AE, AWB, dan AF setelah warmup
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/camera/CameraTuning.kt` (baru), `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`
 
 Dependensi: WP-22.
 
 Tugas:
-- [ ] T-063 Buat `CameraTuning` yang memasang `Camera2Interop.Extender` pada
+- [x] T-063 Buat `CameraTuning` yang memasang `Camera2Interop.Extender` pada
       `ImageAnalysis` untuk mengunci `CONTROL_AE_LOCK`, `CONTROL_AWB_LOCK`, dan
       `CONTROL_AF_MODE` tetap setelah jumlah frame warmup yang dikonfigurasi
       (CWG-07).
-- [ ] T-064 Terapkan `CameraTuning` pada service dan catat status kunci
+- [x] T-064 Terapkan `CameraTuning` pada service dan catat status kunci
       (`locked`/`unsupported`/`failed`) ke `StatusRegistry` (CWG-07, CWG-13).
-- [ ] T-065 Jangan gagalkan operasi bila kunci tidak didukung perangkat; catat
+- [x] T-065 Jangan gagalkan operasi bila kunci tidak didukung perangkat; catat
       alasannya sebagai keterbatasan (CWG-16).
 
 Kriteria terima:
@@ -3120,23 +3180,110 @@ Risiko: sebagian perangkat mengabaikan kunci AE/AWB.
 Mitigasi: status kunci dilaporkan, tidak diklaim berhasil; kegagalan dicatat
 sebagai keterbatasan perangkat.
 
+### Log WP-24 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Berkas baru: `camera/CameraTuning.kt`. Berkas diubah: `CameraService.kt`,
+`stream/StatusRegistry.kt`, `MJPEGServerInstance.kt`,
+`stream/MjpegHttpServer.kt`, `test/.../StatusRegistryTest.kt` (6 berkas —
+melebihi batas lima berkas per WP). Pemecahan tidak dapat dihindari tanpa
+memalsukan status: tugas T-064 menuntut status kunci masuk ke `/status`, dan
+`/status` dibaca dari `StatusRegistry` lewat `snapshot()`. Dicatat sebagai
+deviasi, bukan dibiarkan implisit.
+
+`CameraTuning.lock(camera, executor, onResult)` memasang satu
+`CaptureRequestOptions` berisi:
+
+```text
+CONTROL_AE_LOCK  = true
+CONTROL_AWB_LOCK = true
+CONTROL_AF_MODE  = CONTROL_AF_MODE_OFF
+```
+
+`CONTROL_AF_MODE_OFF` dipilih karena menahan posisi lensa pada jarak kerja saat
+kunci dipasang. Kode tidak mengklaim fokus terkunci pada jarak tertentu yang
+tidak diukur.
+
+Status yang mungkin dilaporkan: `pending`, `locked`, `unsupported`, `failed`.
+`IllegalArgumentException` dan `UnsupportedOperationException` dipetakan ke
+`unsupported`; kegagalan lain ke `failed`. Tidak ada jalur yang melempar
+exception ke pemanggil, sesuai T-065 (CWG-16).
+
+`CameraService`:
+- `maybeLockTuning()` dipanggil dari thread analyzer setelah setiap frame
+  berhasil diterbitkan, memakai penghitung `framesSinceBind` (thread yang sama,
+  tanpa sinkronisasi tambahan).
+- Pemicu: `WARMUP_FRAMES = 30`. Nilai ini jumlah frame warmup, bukan ambang
+  mutu; tidak ada angka FPS/latensi yang diturunkan darinya.
+- `tuningRequested` mencegah permintaan berulang; di-reset saat kamera
+  di-bind ulang.
+
+`StatusRegistry`: `StatusSnapshot.tuningState: String?` (default `null` =
+belum pernah diminta), `setTuningState()`. Status ini **tidak** mengubah
+`cameraState`, sehingga kunci yang tidak didukung tidak membuat stream
+dilaporkan gagal.
+
+`/status` menambah kunci `tuningState`.
+
+Kriteria:
+
+```text
+grep -n "CONTROL_AE_LOCK\|CONTROL_AWB_LOCK\|CONTROL_AF_MODE" camera/CameraTuning.kt
+  51: .setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
+  52: .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
+  54:     CaptureRequest.CONTROL_AF_MODE,
+  55:     CaptureRequest.CONTROL_AF_MODE_OFF
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> GATE_EXIT=0
+  lint: 0 error, 61 warning (tidak ada isu baru)
+  test: StatusRegistryTest tests="9" failures="0" (8 lama + 1 baru)
+```
+
+Dua kesalahan yang ditemukan dan diperbaiki selama WP ini:
+1. `@OptIn(ExperimentalCamera2Interop::class)` tidak berpengaruh — anotasi itu
+   milik `androidx.annotation.experimental`, bukan `RequiresOptIn` Kotlin.
+   Kompilasi memberi peringatan "has no effect", lalu `lint` gagal dengan
+   `UnsafeOptInUsageError` (exit 1). Diperbaiki menjadi
+   `@androidx.annotation.OptIn(ExperimentalCamera2Interop::class)`.
+2. Status kunci semula hanya ditulis ke `Log`, tidak ke registry. Itu tidak
+   memenuhi T-064; jalur registry ditambahkan.
+
+MANUAL-VERIFY **belum dijalankan**: perangkat tidak terdeteksi (`adb devices`
+kosong). Belum terbukti bahwa nilai eksposur dan white balance benar-benar
+berhenti berubah setelah warmup, dan belum diketahui apakah perangkat sasaran
+melaporkan `locked`, `unsupported`, atau `failed`. Status tetap `qc`.
+
+### Log WP-24 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — ketiga kunci ada dan dipasang sebagai satu permintaan.
+- PASS — kegagalan kunci tidak menghentikan operasi dan tidak mengubah
+  `cameraState`; ada test yang mengunci perilaku itu.
+- PASS — tidak ada klaim "terkunci" yang tidak berasal dari hasil perangkat.
+- PELANGGARAN BATAS — WP menyentuh 6 berkas, melebihi 1–5 berkas. Alasan
+  dicatat di atas; kalau QC independen menolak, WP ini masuk `rework` dengan
+  pemecahan berkas.
+- BELUM TERBUKTI — perilaku kunci pada perangkat. Status tetap `qc`.
+
 ---
 
 ## WP-25 — `ApiAuth` untuk token dan pembatasan alamat
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/ApiAuth.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/ApiAuthTest.kt` (baru)
 
 Dependensi: WP-01 (D-27), WP-21.
 
 Tugas:
-- [ ] T-066 Implementasikan `authorize(providedKey: String?, expectedKey: String, remoteAddress: String, allowedAddresses: Set<String>): AuthResult`
+- [x] T-066 Implementasikan `authorize(providedKey: String?, expectedKey: String, remoteAddress: String, allowedAddresses: Set<String>): AuthResult`
       dengan perbandingan waktu tetap (`MessageDigest.isEqual`) dan penolakan
       ketika token kosong pada konfigurasi (CWG-15).
-- [ ] T-067 Kembalikan alasan penolakan yang dapat dibedakan: `MISSING_KEY`,
+- [x] T-067 Kembalikan alasan penolakan yang dapat dibedakan: `MISSING_KEY`,
       `WRONG_KEY`, `ADDRESS_NOT_ALLOWED`, `SERVER_MISCONFIGURED` (CWG-15).
-- [ ] T-068 Unit test: token benar diterima, token salah ditolak `WRONG_KEY`,
+- [x] T-068 Unit test: token benar diterima, token salah ditolak `WRONG_KEY`,
       token kosong ditolak `MISSING_KEY`, alamat di luar daftar ditolak
       `ADDRESS_NOT_ALLOWED`, dan daftar alamat kosong berarti tanpa batas
       alamat (CWG-15, CWG-N06).
@@ -3152,24 +3299,87 @@ Risiko: perbandingan token naif membocorkan panjang token melalui waktu.
 Mitigasi: `MessageDigest.isEqual` wajib; test tidak membuktikan sifat waktu,
 sehingga dicatat sebagai batasan pembuktian.
 
+### Log WP-25 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Berkas baru (2): `stream/ApiAuth.kt` dan `test/.../stream/ApiAuthTest.kt`.
+
+Bentuk API: `ApiAuth.authorize(providedKey, expectedKey, remoteAddress,
+allowedAddresses): ApiAuth.Result` dengan `Result` berisi `ALLOWED`,
+`MISSING_KEY`, `WRONG_KEY`, `ADDRESS_NOT_ALLOWED`, `SERVER_MISCONFIGURED`.
+Tambahan kecil di luar daftar tugas: `ApiAuth.parseAddresses(raw)` yang
+memecah daftar alamat dipisah koma (spasi dibuang, entri kosong diabaikan),
+supaya pembacaan `BuildConfig.ALLOWED_ADDRESSES` tidak tersebar di beberapa
+tempat.
+
+Urutan pemeriksaan yang dipilih, beserta alasannya:
+1. `SERVER_MISCONFIGURED` dicek pertama. Token server kosong adalah kesalahan
+   konfigurasi, bukan kesalahan klien, dan server tidak boleh melayani.
+2. `ADDRESS_NOT_ALLOWED` sebelum pemeriksaan token, sehingga daftar alamat
+   benar-benar menjadi pagar jaringan dan bukan sekadar penyaring kedua.
+3. `MISSING_KEY` untuk header tidak ada **atau** string kosong.
+4. `WRONG_KEY` bila perbandingan gagal.
+
+Perbandingan memakai `MessageDigest.isEqual` atas byte UTF-8 kedua sisi.
+
+Kriteria:
+
+```text
+./gradlew testDebugUnitTest --tests "...stream.ApiAuthTest" -> exit 0
+TEST-...ApiAuthTest.xml: tests="9" skipped="0" failures="0" errors="0"
+
+grep -n "MessageDigest.isEqual" stream/ApiAuth.kt
+  53:        return if (MessageDigest.isEqual(provided, expected)) {
+```
+
+Kasus teruji (9):
+
+```text
+tokenBenarDiterima
+tokenSalahDitolakWrongKey
+tokenKosongDanNullDitolakMissingKey
+alamatDiLuarDaftarDitolak
+alamatDalamDaftarDiterima
+daftarAlamatKosongTanpaBatasAlamat
+tokenServerKosongMisconfigured
+prefiksTokenDitolakWrongKey
+parseAddressesMembuangSpasiDanEntriKosong
+```
+
+Keterbatasan: test tidak membuktikan sifat waktu-tetap. Yang dibuktikan hanya
+bahwa perbandingan memakai fungsi waktu-tetap dan bahwa prefiks token ditolak.
+
+### Log WP-25 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — 9 kasus, melebihi syarat minimal lima.
+- PASS — setiap alasan penolakan dapat dibedakan dan ada test untuk tiap alasan
+  kecuali `ALLOWED` (yang juga diuji).
+- PASS — modul tanpa impor kelas Android; bisa diuji JVM murni.
+- CATATAN — urutan pemeriksaan (alamat sebelum token) adalah keputusan
+  implementasi, bukan kutipan PRD. Dicatat di sini agar tidak disalahartikan
+  sebagai kebutuhan produk.
+
 ---
 
 ## WP-26 — Token dari `local.properties` ke `BuildConfig`
 
-Status: todo
+Status: qc
 
 File: `app/build.gradle.kts`, `docs/token.md` (baru)
 
 Dependensi: WP-25.
 
 Tugas:
-- [ ] T-069 Baca `camwastegreen.apiKey` dan `camwastegreen.allowedAddresses` dari
+- [x] T-069 Baca `camwastegreen.apiKey` dan `camwastegreen.allowedAddresses` dari
       `local.properties` pada konfigurasi Gradle, lalu ekspos sebagai
       `buildConfigField` (CWG-15, CWG-N03).
-- [ ] T-070 Aktifkan `buildFeatures { buildConfig = true }` dan tetapkan nilai
+- [x] T-070 Aktifkan `buildFeatures { buildConfig = true }` dan tetapkan nilai
       kosong bila properti tidak ada, agar build tetap berjalan tanpa rahasia
       (CWG-15).
-- [ ] T-071 Tulis `docs/token.md`: cara membuat token, cara mengisi
+- [x] T-071 Tulis `docs/token.md`: cara membuat token, cara mengisi
       `local.properties`, dan peringatan bahwa token ikut ke dalam APK
       sehingga penggantian token memerlukan build ulang (CWG-N03).
 
@@ -3187,22 +3397,74 @@ dikuasai penyerang.
 Mitigasi: dinyatakan tertulis di `docs/token.md` dan Log; rotasi token
 memerlukan build ulang; batas jaringan tetap lapis kedua.
 
+### Log WP-26 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan `app/build.gradle.kts`:
+
+- Blok `Properties` membaca `rootProject.file("local.properties")` bila ada;
+  berkas tidak ada tidak menggagalkan konfigurasi.
+- `secretProperty(name)` mengembalikan string kosong bila kunci tidak ada, dan
+  meng-escape `\` lalu `"` supaya nilai tidak merusak literal Java.
+- `buildConfigField("String", "API_KEY", ...)` dan
+  `buildConfigField("String", "ALLOWED_ADDRESSES", ...)` di `defaultConfig`.
+- `buildFeatures { buildConfig = true }` ditambahkan di samping `viewBinding`.
+
+`docs/token.md` baru berisi: cara membuat token, contoh isi
+`local.properties`, peringatan token tertanam di APK, peringatan
+`usesCleartextTraffic`, dan perintah `curl` untuk uji 401/200.
+
+Kriteria:
+
+```text
+grep -n "buildConfigField\|local.properties" app/build.gradle.kts
+  12,17,53,54  -> pembacaan properti dan dua buildConfigField
+
+git check-ignore -v local.properties
+  .gitignore:16:local.properties	local.properties
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+  (tanpa camwastegreen.apiKey terisi di local.properties)
+
+grep -rn "apiKey" app/src/main/java
+  MJPEGServerInstance.kt:130  apiKey = apiKey,
+  MjpegHttpServer.kt:44       private val apiKey: String = "",
+  MjpegHttpServer.kt:85       expectedKey = apiKey,
+  CameraConfig.kt:28          val apiKey: String = "",
+  -> tidak ada token literal; nilai hanya mengalir dari BuildConfig
+```
+
+Keterbatasan: `BuildConfig.API_KEY` belum diisi di `local.properties` mesin ini,
+jadi APK hasil build saat ini membawa token kosong. Perilaku itu justru yang
+diuji: server menolak semua permintaan terjaga (lihat Log WP-27).
+
+### Log WP-26 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — build berjalan tanpa rahasia apa pun; tidak ada token di repo.
+- PASS — `local.properties` terbukti diabaikan git.
+- PASS — nilai kosong tidak membuat server terbuka; lihat WP-27.
+- CATATAN — `docs/token.md` menyatakan sendiri bahwa token dapat diekstrak dari
+  APK. Dokumen tidak mengklaim keamanan yang tidak ada.
+
 ---
 
 ## WP-27 — Terapkan otorisasi pada `/video` dan `/status`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt`
 
 Dependensi: WP-25, WP-26.
 
 Tugas:
-- [ ] T-072 Panggil `ApiAuth.authorize` pada `/video` dan `/status` memakai
+- [x] T-072 Panggil `ApiAuth.authorize` pada `/video` dan `/status` memakai
       header `X-Api-Key` dan alamat klien dari sesi NanoHTTPD (CWG-15).
-- [ ] T-073 Balas `401` dengan badan JSON `{"error":{"code":"...","message":"..."}}`
+- [x] T-073 Balas `401` dengan badan JSON `{"error":{"code":"...","message":"..."}}`
       ketika ditolak, tanpa membocorkan token yang benar (CWG-15).
-- [ ] T-074 Catat penolakan beserta alasan dan alamat klien pada log aplikasi
+- [x] T-074 Catat penolakan beserta alasan dan alamat klien pada log aplikasi
       (CWG-15).
 
 Kriteria terima:
@@ -3217,6 +3479,59 @@ Kriteria terima:
 Risiko: `usesCleartextTraffic` membuat token terbaca pada jaringan yang disadap.
 Mitigasi: dicatat sebagai keterbatasan yang diketahui; hanya dipakai pada
 jaringan ruang kontrol; perubahan ke TLS butuh keputusan tersendiri.
+
+### Log WP-27 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan `stream/MjpegHttpServer.kt`:
+- Konstruktor menerima `apiKey: String = ""` dan
+  `allowedAddresses: Set<String> = emptySet()`.
+- `serve()` memisahkan `PATH_VIDEO` dan `PATH_STATUS` sebagai endpoint
+  terjaga; `/` tetap terbuka (halaman diagnosa hanya berisi judul dan tautan).
+- Penolakan dibalas `401` dengan badan JSON
+  `{"error":{"code":"<ALASAN>","message":"<pesan>"}}`. Badan tidak pernah
+  memuat token yang benar.
+- Penolakan dicatat `Log.w(TAG, "Permintaan <uri> ditolak (<ALASAN>) dari <ip>")`.
+  Token tidak pernah masuk log.
+- `MJPEGServerInstance.start()` meneruskan token dari `config.apiKey`, dan bila
+  kosong memakai `BuildConfig.API_KEY` (WP-26), plus
+  `ApiAuth.parseAddresses(BuildConfig.ALLOWED_ADDRESSES)`.
+
+Cacat yang ditemukan dan diperbaiki selama WP ini: percobaan pertama membaca
+`session.headers["X-Api-Key"]`. NanoHTTPD menyimpan nama header dalam huruf
+kecil, sehingga pembacaan itu akan selalu `null` dan **setiap** permintaan akan
+ditolak `MISSING_KEY` — termasuk yang membawa token benar. Kode diubah menjadi
+`session.headers[HEADER_API_KEY.lowercase()]`; nama konstanta tetap
+`X-Api-Key` karena itu yang dikirim klien.
+
+Kriteria:
+
+```text
+grep -n "X-Api-Key\|authorize(" stream/MjpegHttpServer.kt
+  82:            val rejection = ApiAuth.authorize(
+  258:        const val HEADER_API_KEY = "X-Api-Key"
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 61 warning (tidak ada isu baru menunjuk MjpegHttpServer)
+```
+
+MANUAL-VERIFY **belum dijalankan**: perangkat tidak terdeteksi (`adb devices`
+kosong). Artinya 401 untuk token salah, 401 untuk token kosong, dan 200 untuk
+token benar belum terbukti pada perangkat. Status tetap `qc`.
+
+### Log WP-27 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — kedua endpoint terjaga memanggil `ApiAuth.authorize`; tidak ada jalur
+  lain ke `handleVideo()` atau `handleStatus()`.
+- PASS — balasan penolakan tidak memuat token; log juga tidak.
+- PASS — token kosong pada konfigurasi menghasilkan `401 SERVER_MISCONFIGURED`,
+  bukan server terbuka.
+- PASS — `X-Api-Key` dibaca dengan nama huruf kecil sesuai perilaku NanoHTTPD
+  (cacat di atas sudah diperbaiki sebelum gerbang dijalankan).
+- BELUM TERBUKTI — seluruh perilaku HTTP nyata di perangkat. Status tetap `qc`.
 
 ---
 

@@ -215,6 +215,7 @@ class MjpegHttpServer(
             put("width", snapshot.width ?: JSONObject.NULL)
             put("height", snapshot.height ?: JSONObject.NULL)
             put("clients", snapshot.clients)
+            put("tuningState", snapshot.tuningState ?: JSONObject.NULL)
         }
         return newFixedLengthResponse(Response.Status.OK, "application/json", json.toString())
     }

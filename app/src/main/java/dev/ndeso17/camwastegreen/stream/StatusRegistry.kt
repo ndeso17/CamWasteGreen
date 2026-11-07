@@ -14,7 +14,12 @@ data class StatusSnapshot(
     val height: Int?,
     val clients: Int,
     val cameraState: String,
-    val cameraStateReason: String?
+    val cameraStateReason: String?,
+    /**
+     * Status kunci AE/AWB/AF: `pending`, `locked`, `unsupported`, atau `failed`
+     * (CWG-07, CWG-13). `null` berarti kunci belum pernah diminta.
+     */
+    val tuningState: String? = null
 )
 
 /**
@@ -47,6 +52,7 @@ class StatusRegistry(
     private var cameraState: String = CameraState.STARTING
     private var cameraStateReason: String? = null
     private var clientCount: Int = 0
+    private var tuningState: String? = null
 
     /**
      * Catat frame yang baru diterima.
@@ -73,6 +79,16 @@ class StatusRegistry(
             cameraState = state
             cameraStateReason = reason
         }
+    }
+
+    /**
+     * Catat status kunci AE/AWB/AF.
+     *
+     * Status ini tidak mengubah `cameraState`: kunci yang tidak didukung
+     * perangkat adalah keterbatasan, bukan kegagalan stream (CWG-16).
+     */
+    fun setTuningState(state: String?) {
+        synchronized(lock) { tuningState = state }
     }
 
     /** Set jumlah klien stream yang sedang terhubung. */
@@ -115,7 +131,8 @@ class StatusRegistry(
                 height = packet?.height,
                 clients = clientCount,
                 cameraState = cameraState,
-                cameraStateReason = cameraStateReason
+                cameraStateReason = cameraStateReason,
+                tuningState = tuningState
             )
         }
     }
