@@ -16,6 +16,7 @@ H.264 (B-30, D-30), pengesahan namespace alias `CWG-` (D-31).
 |---|---|---|---|
 | 1 | 7 Nov 2026 | Rencana awal, WP-01..WP-30 | 11 temuan audit + D-27..D-29 |
 | 2 | 7 Nov 2026 | Tambah WP-31 (hapus jalur H.264), perluas WP-29 T-077 agar `AGENTS.md` tidak lagi mencantumkan B-21/B-28/B-29 sebagai terbuka, perbaiki tag T-002 menjadi `CWG-N01` + `CWG-N02` | D-30, D-31; temuan QC-01 dan QC-04 pada laporan `.work/evidence/QC-WP-01.md` |
+| 3 | 7 Nov 2026 | Tambah WP-32 (rapikan `README.md`: hapus tabel "Keadaan saat ini" yang cepat basi, arahkan pembaca ke PLAN), revisi T-085 WP-29 agar tidak menggandakan pekerjaan itu, catat urutan eksekusi WP-32 sebelum WP-05 | Temuan QC-17 (WP-03) dan QC-20 (WP-04): tabel keadaan harus diubah ulang pada hampir setiap WP |
 
 Tidak ada WP `done` yang dihapus, dinomori ulang, atau diubah kriterianya.
 WP-01 tetap `done`; revisi ini hanya menambah WP-31 dan memperjelas tugas WP
@@ -1478,8 +1479,8 @@ Status: todo
 
 File: `.work/evidence/baseline-camwastegreen.md` (baru)
 
-Dependensi: WP-01..WP-27, WP-31 (seluruh WP kode, termasuk penghapusan jalur
-H.264, selesai lebih dulu).
+Dependensi: WP-01..WP-27, WP-31, WP-32 (seluruh WP kode, termasuk penghapusan
+jalur H.264 dan perapian `README.md`, selesai lebih dulu).
 
 Tugas:
 - [ ] T-075 Jalankan `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`,
@@ -1520,12 +1521,12 @@ Tugas:
 - [ ] T-079 Perbarui `.work/Architecture.md`: alur frame memakai
       `FrameEncoder` → `FrameSource` → `MultipartWriter`, tanpa preview pada
       v1, dan status otorisasi token (CWG-01, CWG-11, CWG-15).
-- [ ] T-085 Perbarui `README.md`: hapus baris "Keadaan saat ini" yang sudah
-      tertutup (ML Kit, filter dan enkode ganda, audio, kamera terikat
-      Activity, status belum terukur, stream tanpa otorisasi, jalur H.264),
-      ubah kalimat "Peran yang dituju" menjadi pernyataan keadaan, dan
-      hilangkan duplikasi dengan bagian "Status pengembangan" (CWG-N06;
-      temuan QC-11 dan QC-12 WP-02).
+- [ ] T-085 Perbarui `README.md` setelah seluruh WP kode selesai: ubah
+      kalimat "Peran yang dituju" menjadi pernyataan keadaan yang benar
+      setelah WP-03..WP-31 tuntas, dan hilangkan duplikasi dengan bagian
+      "Status pengembangan" (CWG-N06; temuan QC-11 dan QC-12 WP-02).
+      Tabel "Keadaan saat ini" sudah dihapus lebih dulu pada WP-32, sehingga
+      tugas ini tidak perlu mengulang penghapusan tabel.
 
 Kriteria terima:
 - `grep -rn "MicManager\|FilterPipeline\|FrameBuffer\|previewView" AGENTS.md .work/Structure.md .work/Architecture.md`
@@ -1533,7 +1534,7 @@ Kriteria terima:
 - `grep -n "B-21\|B-28\|B-29" AGENTS.md` hanya menemukan rujukan yang
   menyatakan blocker tersebut selesai dengan D-27..D-29, bukan sebagai
   keputusan terbuka.
-- `grep -n "Keadaan saat ini" README.md` kosong, dan tidak ada baris tabel yang
+- `grep -n "Keadaan saat ini" README.md` kosong, dan tidak ada baris yang
   menyebut `MicManager`, `FilterPipeline`, `StreamEncoder`, `TcpStreamServer`,
   `bindToLifecycle`, atau `RECORD_AUDIO` sebagai masih berjalan.
 - Setiap komponen pada `.work/Structure.md` bagian 3 memiliki berkas nyata:
@@ -1619,6 +1620,49 @@ Risiko: penghapusan tidak mengurangi beban CPU bila `StreamEncoder` ternyata
 aktif pada jalur sensor.
 Mitigasi: tidak diklaim sebagai penghematan terukur; pengukuran beban tetap
 menunggu perangkat dan ambang B-06.
+
+---
+
+## WP-32 — Rapikan `README.md`: hapus tabel keadaan yang cepat basi
+
+Status: todo
+
+File: `README.md`
+
+Dependensi: WP-02, WP-03, WP-04. Tidak ada WP prasyarat kode.
+
+Urutan eksekusi: **kerjakan WP-32 sebelum WP-05**. Alasannya: tabel "Keadaan
+saat ini" pada `README.md` menyebut sisa jalur upstream per WP, sehingga
+hampir setiap WP berikutnya harus memperbarui satu baris. Dengan menghapus
+tabel lebih dulu, WP-05 dan WP sesudahnya tidak perlu menyentuh `README.md`,
+dan tabel tidak pernah menyatakan keadaan yang sudah basi dalam jangka waktu
+panjang.
+
+Tugas:
+- [ ] T-088 Hapus bagian "Keadaan saat ini" beserta tabelnya dari
+      `README.md` (CWG-N06).
+- [ ] T-089 Ganti dengan pointer yang tidak cepat basi: rujukan ke
+      `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` sebagai sumber
+      status per work package, dan ke `.work/AGENTS.md` repo untuk struktur
+      serta daftar defek. Jangan menulis daftar status yang disalin manual
+      (CWG-N06).
+- [ ] T-090 Pastikan tidak ada klaim bentuk sekarang yang tersisa tentang
+      ML Kit, filter, audio, kamera terikat Activity, `/status`, token, atau
+      jalur H.264 sebagai "sudah tidak ada" maupun "masih ada" (CWG-N02,
+      CWG-N06).
+
+Kriteria terima:
+- `grep -n "Keadaan saat ini" README.md` tidak menemukan hasil.
+- `grep -nE "MicManager|FilterPipeline|StreamEncoder|TcpStreamServer|bindToLifecycle|RECORD_AUDIO|AiProcessor|/mic/toggle" README.md`
+  tidak menemukan hasil.
+- `grep -n "Plan_PenambalanTemuanKamera" README.md` menemukan rujukan PLAN.
+- `./gradlew assembleDebug` lulus.
+- Bukti: keluaran grep dan ringkasan build pada Log WP.
+
+Risiko: pembaca kehilangan ringkasan keadaan sekarang yang mudah dilihat.
+Mitigasi: pointer ke PLAN dan `AGENTS.md` memberi sumber yang sama tetapi
+selalu mutakhir; ringkasan manual justru sumber kesalahan berulang
+(temuan QC-06..QC-08, QC-13, QC-17, QC-20).
 
 ---
 
