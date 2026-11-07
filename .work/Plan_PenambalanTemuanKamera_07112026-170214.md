@@ -18,6 +18,7 @@ H.264 (B-30, D-30), pengesahan namespace alias `CWG-` (D-31).
 | 2 | 7 Nov 2026 | Tambah WP-31 (hapus jalur H.264), perluas WP-29 T-077 agar `AGENTS.md` tidak lagi mencantumkan B-21/B-28/B-29 sebagai terbuka, perbaiki tag T-002 menjadi `CWG-N01` + `CWG-N02` | D-30, D-31; temuan QC-01 dan QC-04 pada laporan `.work/evidence/QC-WP-01.md` |
 | 3 | 7 Nov 2026 | Tambah WP-32 (rapikan `README.md`: hapus tabel "Keadaan saat ini" yang cepat basi, arahkan pembaca ke PLAN), revisi T-085 WP-29 agar tidak menggandakan pekerjaan itu, catat urutan eksekusi WP-32 sebelum WP-05 | Temuan QC-17 (WP-03) dan QC-20 (WP-04): tabel keadaan harus diubah ulang pada hampir setiap WP |
 | 4 | 8 Nov 2026 | Tambah WP-33..WP-35 (pilihan interface jaringan untuk jalur streaming: logika murni, penyimpanan SharedPreferences, UI dan bind server). Urutan: WP-33..WP-35 setelah WP-22 dan sebelum WP-23 | Permintaan pengguna sesi 7–8 Nov 2026. Lingkup ini belum punya ID PRD; ID dan penambahan ke `.work/PRD.md` menunggu pengesahan pengguna |
+| 5 | 8 Nov 2026 | Tambah WP-36 (hapus paket `gpuimage`, 16 shader `res/raw`, drawable `bg_filter_chip*`, dan dimens `filter_menu_*`). WP-15 ditutup lebih awal karena kriteria grep `FilterManager`/`FilterType` tidak dapat dipenuhi tanpa menghapus `gpuimage`, sedangkan paket itu di luar daftar berkas WP-15 | Mitigasi tertulis pada WP-15 dan catatan Planner Notes butir 4; temuan QC-37 |
 
 Tidak ada WP `done` yang dihapus, dinomori ulang, atau diubah kriterianya.
 WP-01 tetap `done`; revisi ini hanya menambah WP-31 dan memperjelas tugas WP
@@ -2025,14 +2026,14 @@ dan layout menu filter; WP-31 menghapus `StreamEncoder`/`TcpStreamServer`.
 
 ## WP-15 — Hapus `FilterPipeline`, paket `ai`, dan layout menu filter
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/pipeline/FilterPipeline.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/ai/AiProcessor.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/ai/FaceDetector.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/ai/SelfieSegmenter.kt` (hapus), `app/src/main/res/layout/overlay_filter_menu.xml` (hapus)
 
 Dependensi: WP-13, WP-14.
 
 Tugas:
-- [ ] T-039 Hapus berkas pipeline filter, seluruh paket `ai`, dan layout menu
+- [x] T-039 Hapus berkas pipeline filter, seluruh paket `ai`, dan layout menu
       filter (CWG-N02).
 - [ ] T-040 Pastikan tidak ada rujukan tersisa ke `FilterType`, `FilterManager`,
       atau `AiProcessor` di `app/src` (CWG-N02).
@@ -2046,6 +2047,76 @@ Kriteria terima:
 Risiko: paket `gpuimage` masih merujuk `FilterType` sehingga build gagal.
 Mitigasi: paket `gpuimage` belum dihapus pada WP ini; bila build gagal, catat
 temuan dan pindahkan penghapusan `gpuimage` ke WP baru, bukan mencampur WP.
+
+### Log WP-15 (Executor)
+
+Berkas berubah (5, sesuai daftar WP): `pipeline/FilterPipeline.kt`,
+`ai/AiProcessor.kt`, `ai/FaceDetector.kt`, `ai/SelfieSegmenter.kt`, dan
+`res/layout/overlay_filter_menu.xml` — kelima berkas dihapus dengan `git rm`.
+
+Checklist:
+
+- [x] T-039 Berkas pipeline filter, seluruh paket `ai`, dan layout menu filter
+      dihapus. Direktori `ai/` dan `pipeline/` menjadi kosong lalu ikut hilang
+      dari git.
+- [ ] T-040 **Belum tuntas di WP ini.** `FilterPipeline`, `AiProcessor`,
+      `FaceDetector`, dan `SelfieSegmenter` sudah tidak ada rujukan di
+      `app/src`. Namun `FilterManager` dan `FilterType` masih ada di paket
+      `gpuimage`, yang tidak tercantum pada daftar `File:` WP-15. Empat dari
+      lima pola pada kriteria grep sudah kosong; dua pola tersisa dipindahkan ke
+      WP-36 sesuai mitigasi WP-15.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -rn "FilterPipeline|AiProcessor|FaceDetector|SelfieSegmenter" app/src
+  -> tanpa hasil (exit 1)
+grep -rn "FilterManager|FilterType" app/src
+  -> app/src/main/java/.../gpuimage/FilterManager.kt, .../gpuimage/FilterType.kt,
+     .../gpuimage/CameraGLSurfaceView.kt
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Kriteria terima `grep` **belum sepenuhnya terpenuhi** dan T-040 sengaja
+ditandai belum tuntas. Alasan tidak diperluas: daftar `File:` WP-15 berisi lima
+berkas dan mitigasi WP-15 eksplisit meminta pemindahan penghapusan `gpuimage`
+ke WP baru bila `FilterType` masih menghalangi. Memperbesar WP-15 menjadi 20+
+berkas melanggar aturan 1–5 berkas per WP. Revisi 5 rencana menambah WP-36.
+
+Keterbatasan:
+
+- Paket `gpuimage` beserta 16 shader `res/raw/*.glsl` masih di repo dan masih
+  ikut dikompilasi. Tidak ada rujukan ke paket itu dari luar dirinya sendiri
+  sejak WP-13; penghapusannya milik WP-36.
+- Drawable `bg_filter_chip` dan `bg_filter_chip_selected` serta dimens
+  `filter_menu_top_margin` dan `filter_menu_right_margin` menjadi yatim.
+  Dihapus pada WP-36 (QC-37).
+- `res/layout/overlay_filter_menu.xml` memakai `bg_filter_chip`; setelah
+  layout dihapus, drawable itu tidak dirujuk siapa pun.
+
+### Log WP-15 (QC)
+
+Verdict: **PASS sebagian sebagai pemeriksaan sendiri (Executor memeriksa
+hasilnya sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- `grep -rn "FilterPipeline|AiProcessor|FaceDetector|SelfieSegmenter" app/src`
+  → tanpa hasil.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan ulang sendiri setelah penghapusan).
+- Isi diperiksa: tidak ada rujukan `R.layout.overlay_filter_menu` di
+  `activity_main.xml`; tidak ada kelas di paket `ai` yang diimpor dari luar;
+  `MainActivity.kt` tidak lagi menyebut `pipeline` maupun `ai`.
+
+Temuan:
+
+- QC-40: kriteria grep WP-15 masih menyisakan `FilterManager`/`FilterType` di
+  paket `gpuimage`. Diteruskan ke WP-36. T-040 tetap belum tuntas sampai
+  WP-36 selesai.
+- QC-37: drawable `bg_filter_chip*` dan dimens `filter_menu_*` yatim.
+  Diteruskan ke WP-36.
+
+Dampak ke WP berikutnya: WP-16 boleh mulai (dependensi WP-15 terpenuhi untuk
+berkas yang tercantum); WP-36 harus selesai sebelum gerbang WP-28.
 
 ---
 
@@ -2800,6 +2871,47 @@ dari host lain; korespondensi encoder dengan backend tetap `B-24`.
 
 ---
 
+## WP-36 — Hapus sisa jalur filter GPU dan sumber daya yatim
+
+Status: todo
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/gpuimage/CameraGLSurfaceView.kt` (hapus), `.../gpuimage/FilterManager.kt` (hapus), `.../gpuimage/FilterType.kt` (hapus), `.../gpuimage/FrameCaptureHelper.kt` (hapus), `.../gpuimage/GLTextureRenderer.kt` (hapus), `.../gpuimage/ShaderProgram.kt` (hapus), `app/src/main/res/raw/*.glsl` (16 berkas, hapus),
+`app/src/main/res/drawable/bg_filter_chip.xml` (hapus),
+`app/src/main/res/drawable/bg_filter_chip_selected.xml` (hapus),
+`app/src/main/res/values/dimens.xml`
+
+Dependensi: WP-15. Menutup sisa T-040 dan temuan QC-37.
+
+Tugas:
+- [ ] T-102 Hapus paket `gpuimage` seluruhnya. Paket ini tidak lagi dirujuk
+      dari luar dirinya sendiri sejak WP-13 (CWG-N02).
+- [ ] T-103 Hapus `res/raw/*.glsl` (16 shader) yang hanya dibaca `FilterType`
+      dan `FilterManager` (CWG-N02).
+- [ ] T-104 Hapus drawable `bg_filter_chip`, `bg_filter_chip_selected`, dan
+      dimens `filter_menu_top_margin` serta `filter_menu_right_margin` yang
+      menjadi yatim setelah WP-13 dan WP-15 (CWG-N02, QC-37).
+
+Kriteria terima:
+- `grep -rn "FilterManager\|FilterType\|gpuimage\|fragmentShaderRes" app/src`
+  kosong.
+- `grep -rn "bg_filter_chip\|filter_menu_top_margin\|filter_menu_right_margin" app/src`
+  kosong.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` lulus.
+- Bukti: keluaran grep dan build pada Log WP.
+
+Risiko: ada berkas di luar `app/src` (dokumen `docs/`, `tools/`) yang masih
+menyebut shader atau filter GPU lalu dianggap berlaku.
+Mitigasi: penyebutan di dokumen ditangani WP-29 (sinkronisasi dokumen), bukan
+dihapus diam-diam di sini; WP ini hanya menyentuh `app/src`.
+
+Deviasi yang diakui sejak awal: WP ini menghapus 20 berkas, melebihi panduan
+1–5 berkas per WP. Alasannya, satuannya adalah penghapusan paket mati:
+memecahnya menjadi beberapa WP menghasilkan keadaan antara yang tidak bermakna
+(paket tanpa shader, atau shader tanpa pembaca) tanpa menambah nilai tinjauan.
+Seluruh perubahan bersifat penghapusan dan tidak mengubah perilaku.
+
+---
+
 ## Traceability Matrix
 
 ### Temuan audit → WP
@@ -2824,6 +2936,7 @@ dari host lain; korespondensi encoder dengan backend tetap `B-24`.
 | P2-11 lisensi repo | CWG-N03 | WP-02 | `LICENSE`, `README.md` |
 | P0-2 nomor urut dan waktu tangkap frame (B-24) | CWG-02, CWG-N04 | WP-08, WP-09, WP-14 | `FrameSourceTest` |
 | P1-6 jalur H.264 tidak lagi menambah encode (B-30) | CWG-N01, CWG-N02 | WP-31 | grep `StreamEncoder\|TcpStreamServer` kosong, build |
+| P1-6 sisa jalur filter GPU dan sumber daya yatim | CWG-N02 | WP-36 | grep `gpuimage\|FilterManager\|FilterType\|bg_filter_chip` kosong, build |
 
 ### Requirement → WP
 
@@ -2846,7 +2959,7 @@ dari host lain; korespondensi encoder dengan backend tetap `B-24`.
 | CWG-15 | WP-25, WP-26, WP-27 | `ApiAuthTest`, MANUAL-VERIFY 401 |
 | CWG-16 | WP-10, WP-14, WP-24 | `StatusRegistryTest` kasus gagal |
 | CWG-N01 | WP-06, WP-07, WP-14, WP-16, WP-31 | grep enkode, ukuran APK |
-| CWG-N02 | WP-13, WP-15, WP-16 | grep kosong, dependensi dihapus |
+| CWG-N02 | WP-13, WP-15, WP-16, WP-36 | grep kosong, dependensi dihapus |
 | CWG-N03 | WP-02, WP-26 | `LICENSE`, `git check-ignore` |
 | CWG-N04 | WP-08, WP-14 | `FrameSourceTest` |
 | CWG-N05 | WP-10, WP-30 | `StatusRegistryTest`, checklist |
@@ -2889,10 +3002,12 @@ Seluruh butir berikut **belum diuji**; tidak ada perangkat pada sesi ini.
    menundanya karena keputusan pengguna belum ada; revisi 2 memasukkannya ke
    lingkup. WP-31 bergantung pada WP-18 karena pemanggilan encoder berada di
    `MainActivity.kt` yang juga dipindahkan ke service pada WP-18.
-4. Paket `gpuimage` belum dihapus pada rencana ini karena penghapusannya
-   bergantung pada hasil WP-15. Bila WP-15 gagal karena rujukan `FilterType`,
-   Executor wajib membuat temuan dan Planner menambah WP lanjutan, bukan
-   memperbesar WP-15.
+4. Paket `gpuimage` dihapus pada WP-36, bukan di dalam WP-15. Revisi 1
+   menundanya sampai hasil WP-15 diketahui; hasilnya, build WP-15 lulus tetapi
+   kriteria grep `FilterManager`/`FilterType` tidak dapat dipenuhi tanpa
+   menghapus paket itu. Sesuai mitigasi tertulis WP-15, Planner menambah WP
+   lanjutan alih-alih memperbesar WP-15. WP-36 juga memuat sisa temuan QC-37
+   (drawable `bg_filter_chip*` dan dimens `filter_menu_*`).
 5. Setiap WP kode wajib menjalankan preflight sumber daya lebih dulu. Build
    Gradle pertama pada repo ini memerlukan sekitar tujuh menit.
 6. Angka 1280x720, 20 FPS, quality 80, dan maks 2 klien adalah default
