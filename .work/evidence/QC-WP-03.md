@@ -116,3 +116,54 @@ ini sah menurut kontrak WP. Sudah dicatat sebagai amendemen pada PLAN.
 
 Tidak ada push. Verdict FAIL, jadi commit artefak QC dilakukan tetapi `main`
 tidak di-push sampai WP-03 `done`.
+
+---
+
+# QC putaran 2 — rework WP-03
+
+**QC date:** 7 November 2026
+**Commit yang diperiksa:** working tree setelah `888bb08`
+**Verdict putaran 2: PASS_WITH_NOTES**
+
+## Rework dibuktikan
+
+| Rework | Perintah QC | Hasil |
+|---|---|---|
+| REWORK-R1 | `sed -n '26p' README.md` | `Endpoint \`/mic/toggle\` dan rute \`/audio\` **sudah dihapus**. \`MicManager\`, tombol mikrofon di UI, dan izin \`RECORD_AUDIO\` masih ada` |
+| REWORK-R1 | `grep -rn "mic/toggle" app/src \| wc -l` | 0 |
+| REWORK-R1 | `grep -rn '"/audio"' app/src \| wc -l` | 0 |
+| REWORK-R1 | `grep -rn "MicManager" app/src \| wc -l` | 8 (klaim "masih ada" benar) |
+| REWORK-R1 | `grep -rn "RECORD_AUDIO" app/src \| wc -l` | 2 (klaim "masih ada" benar) |
+| REWORK-R1 | `grep -n "btnMicToggle" MainActivity.kt activity_main.xml` | `MainActivity.kt:49,119,262`; `activity_main.xml:121` — tombol mikrofon masih ada, klaim benar |
+| REWORK-R2 | `grep -n "audio\|mic" MjpegHttpServer.kt` | `NONE` |
+| REWORK-R2 | `./gradlew assembleDebug --console=plain` | `BUILD SUCCESSFUL in 6s` |
+| REWORK-R2 | `git diff 12cdbf1 -- MjpegHttpServer.kt` | kosong — kode tidak berubah pada rework, hanya dokumentasi |
+
+Setiap klausa baris README diperiksa terhadap kode, bukan hanya keberadaan
+frase. QC-13 dinyatakan **tertutup**.
+
+## Temuan putaran 2
+
+| ID | Severity | Detail | Bukti |
+|---|---|---|---|
+| QC-17 | note | Baris audio pada `README.md` akan kembali tidak akurat pada WP-04 (tombol mikrofon hilang) dan WP-05 (`MicManager` dan `RECORD_AUDIO` hilang). Pembaruan akhir sudah dijadwalkan pada `T-085` WP-29, tetapi README akan salah selama beberapa WP di antaranya. Ini konsekuensi memilih tabel "keadaan saat ini" sebagai bentuk dokumentasi; alternatifnya adalah menghapus tabel sampai pekerjaan selesai. | `README.md:26`; PLAN `T-085` |
+| QC-14 | note | Tetap berlaku: `AGENTS.md:44,67` masih menyebut `/mic/toggle`. Ditangani `T-077` WP-29. | `AGENTS.md:44,67` |
+| QC-15 | note | Tetap berlaku: `lintDebug` gagal 1 error lama di `MicManager.kt:54`, 111 warning. Ditutup WP-05. | `lint-results-debug.txt` |
+| QC-16 | info | `404` untuk `/audio` dan `/mic/toggle` belum diuji pada perangkat; tetap `MANUAL-VERIFY`. | Log WP-03 |
+
+Tidak ada temuan blocker.
+
+## Keamanan putaran 2
+
+| Aspek | Hasil |
+|---|---|
+| Pola rahasia pada diff | tanpa hasil |
+| Berkas lokal ter-track | tidak ada |
+| Karakter non-ASCII rusak | 0 baris |
+| Klaim keamanan | tidak ada klaim bahwa mikrofon tidak dapat diaktifkan; `MicManager` masih dapat dipanggil sampai WP-04 |
+
+## Catatan push
+
+Guard push: root repo benar, tidak ada berkas lokal/rahasia, author `ndeso17`,
+`diff --check` bersih. Verdict PASS_WITH_NOTES → commit artefak QC lalu push
+`main`.

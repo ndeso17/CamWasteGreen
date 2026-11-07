@@ -457,7 +457,7 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-03 — Hapus endpoint `/audio` dan `/mic/toggle`
 
-Status: rework
+Status: done
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`,
 `README.md`
@@ -468,7 +468,7 @@ Tugas:
 - [x] T-006 Hapus cabang rute `/audio` dan `/mic/toggle`, fungsi
       `audioInputStream()`, serta field `mic` pada respons `/status` (CWG-14).
 - [x] T-007 Pastikan server tidak lagi merujuk `MicManager` (CWG-14).
-- [ ] T-086 Perbarui baris audio pada tabel "Keadaan saat ini" di `README.md`
+- [x] T-086 Perbarui baris audio pada tabel "Keadaan saat ini" di `README.md`
       agar akurat: `/mic/toggle` sudah dihapus, sementara `MicManager`, tombol
       mikrofon, dan izin `RECORD_AUDIO` masih ada sampai WP-04/WP-05 (CWG-N06;
       temuan QC-13 WP-03). `README.md` ditambahkan ke `File:` oleh amendemen
@@ -529,6 +529,27 @@ Keterbatasan:
 - `/` masih memakai judul "Android IP Cam" dari upstream; penggantian halaman
   diagnostik berada pada WP-12.
 
+### Log WP-03 (Executor) — rework putaran 1
+
+Rework dari temuan QC-13 (`FAIL`). Berkas berubah: `README.md` hanya satu
+baris (baris 26, kolom tabel "Keadaan saat ini"). `MjpegHttpServer.kt` tidak
+disentuh pada putaran ini.
+
+- [x] REWORK-R1 Baris audio sekarang berbunyi: "Endpoint `/mic/toggle` dan rute
+      `/audio` **sudah dihapus**. `MicManager`, tombol mikrofon di UI, dan izin
+      `RECORD_AUDIO` masih ada", dengan kolom "Ditutup oleh" menjadi
+      `WP-04, WP-05` (WP-03 tidak lagi dicantumkan karena sudah selesai).
+      Uji: `grep -n "mic/toggle" README.md` → baris 26 memuat "sudah dihapus";
+      `grep -rn "mic/toggle" app/src` → 0 hasil.
+- [x] REWORK-R2 Tanpa regresi: `grep -n "audio\|mic" MjpegHttpServer.kt` →
+      `NONE`; `./gradlew assembleDebug --console=plain` →
+      `BUILD SUCCESSFUL in 6s`; pemindaian non-ASCII `README.md` → 0 baris.
+
+Keterbatasan: baris itu kembali harus diperbarui pada WP-04 (tombol mikrofon
+hilang) dan WP-05 (`MicManager` dan `RECORD_AUDIO` hilang). Tugas pembaruan
+akhir sudah ada pada `T-085` WP-29; QC-14 mencatat `AGENTS.md` juga perlu
+diperbarui di sana.
+
 ### Log WP-03 (QC)
 
 Verdict: **FAIL**. Laporan: `.work/evidence/QC-WP-03.md`. Commit diperiksa:
@@ -571,6 +592,38 @@ Amendemen Planner: `README.md` ditambahkan ke `File:` WP-03 dan tugas `T-086`
 ditulis, karena rework ini menyentuh berkas di luar daftar awal.
 
 Tidak di-push karena verdict FAIL.
+
+### Log WP-03 (QC) — putaran 2
+
+Verdict: **PASS_WITH_NOTES**. Laporan: `.work/evidence/QC-WP-03.md` bagian
+"QC putaran 2".
+
+Rework dibuktikan:
+
+- REWORK-R1 selesai. `sed -n '26p' README.md` memuat "Endpoint `/mic/toggle`
+  dan rute `/audio` **sudah dihapus**. `MicManager`, tombol mikrofon di UI,
+  dan izin `RECORD_AUDIO` masih ada". Tiap klausa diperiksa terhadap kode:
+  `mic/toggle` di `app/src` = 0, `"/audio"` = 0, `MicManager` = 8 rujukan,
+  `RECORD_AUDIO` = 2 rujukan, `btnMicToggle` ada di `MainActivity.kt:49,119,262`
+  dan `activity_main.xml:121`. Klaim "masih ada" dan "sudah dihapus" keduanya
+  cocok.
+- REWORK-R2 selesai. `grep -n "audio\|mic" MjpegHttpServer.kt` → `NONE`;
+  `./gradlew assembleDebug` → `BUILD SUCCESSFUL in 6s`;
+  `git diff 12cdbf1 -- MjpegHttpServer.kt` kosong, sehingga rework tidak
+  menyentuh kode.
+
+QC-13 dinyatakan tertutup. Temuan baru hanya note:
+
+- QC-17: baris audio README akan kembali tidak akurat pada WP-04 (tombol
+  mikrofon hilang) dan WP-05 (`MicManager` dan `RECORD_AUDIO` hilang).
+  Pembaruan akhir ada pada `T-085` WP-29; README akan salah selama beberapa WP
+  di antaranya. Dicatat sebagai konsekuensi bentuk dokumentasi, bukan
+  pelanggaran baru.
+- QC-14 (`AGENTS.md` masih menyebut `/mic/toggle`, ditangani `T-077`),
+  QC-15 (lint error lama di `MicManager.kt`, ditutup WP-05), dan QC-16
+  (`404` masih `MANUAL-VERIFY`) tetap berlaku.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 

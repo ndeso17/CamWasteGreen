@@ -23,7 +23,7 @@ Pada commit ini masih ada:
 |---|---|---|
 | ML Kit face detection | `FilterPipeline.init` menyalakan `AiProcessor.isFaceDetectionEnabled`, dan `FilterPipeline.process` memanggil `AiProcessor.process` pada setiap frame | WP-13, WP-15, WP-16 |
 | Filter visual dan enkode ganda | Jalur sensor memanggil `FilterPipeline.process` yang melakukan `YuvImage.compressToJpeg` lalu `Bitmap.compress` | WP-13, WP-14, WP-15 |
-| Audio dan mikrofon | `MicManager`, endpoint `/mic/toggle`, tombol mikrofon di UI, dan izin `RECORD_AUDIO` masih ada | WP-03, WP-04, WP-05 |
+| Audio dan mikrofon | Endpoint `/mic/toggle` dan rute `/audio` **sudah dihapus**. `MicManager`, tombol mikrofon di UI, dan izin `RECORD_AUDIO` masih ada | WP-04, WP-05 |
 | Kamera terikat Activity | `bindToLifecycle` dipanggil dari `MainActivity`; belum ada foreground service | WP-17, WP-18 |
 | Status belum terukur | `/status` melaporkan nilai konfigurasi, bukan pengukuran | WP-10, WP-12 |
 | Stream tanpa otorisasi | Tidak ada token; `usesCleartextTraffic=true` | WP-25, WP-26, WP-27 |
