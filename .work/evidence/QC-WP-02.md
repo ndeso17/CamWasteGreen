@@ -38,11 +38,11 @@ Rework konkret ada di bagian Rework. Kode tidak perlu diubah; hanya README.
 |---|---|---|
 | T-004 | `LICENSE` berisi teks MIT, pemegang hak `2026 ndeso17` | `grep -c "MIT License" LICENSE` = 1; `grep -c 'THE SOFTWARE IS PROVIDED "AS IS"' LICENSE` = 1; baris 3 = `Copyright (c) 2026 ndeso17`; seluruh klausa izin/penafian MIT lengkap |
 | T-005 | `README.md` memuat tujuan, batas peran, asal kode, atribusi, perintah build, rujukan `.work/` | `grep -c "ndeso17/ipcam" README.md` = 1; bagian "Bangun dan uji" memuat empat perintah Gradle; tabel "Dokumen" merujuk `.work/PRD.md`, `.work/Architecture.md`, `.work/Structure.md`, `.work/Rules.md`, `AGENTS.md` |
-| Kriteria | `LICENSE` ada dan memuat frasa wajib | ✅ |
-| Kriteria | `README.md` menyebut `ndeso17/ipcam` | ✅ |
-| Kriteria | `git status --short` tanpa `local.properties`/rahasia | ✅ |
-| Kriteria | `assembleDebug` tetap lulus | ✅ `BUILD SUCCESSFUL in 5s` |
-| Kriteria | Kutipan dua baris pertama tiap berkas pada Log | ✅ Log Executor memuat `grep -c` untuk keduanya |
+| Kriteria | `LICENSE` ada dan memuat frasa wajib | ya |
+| Kriteria | `README.md` menyebut `ndeso17/ipcam` | ya |
+| Kriteria | `git status --short` tanpa `local.properties`/rahasia | ya |
+| Kriteria | `assembleDebug` tetap lulus | ya `BUILD SUCCESSFUL in 5s` |
+| Kriteria | Kutipan dua baris pertama tiap berkas pada Log | ya Log Executor memuat `grep -c` untuk keduanya |
 
 ---
 

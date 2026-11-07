@@ -1625,7 +1625,7 @@ menunggu perangkat dan ambang B-06.
 
 ## WP-32 — Rapikan `README.md`: hapus tabel keadaan yang cepat basi
 
-Status: qc
+Status: done
 
 File: `README.md`
 
@@ -1709,6 +1709,38 @@ Keterbatasan:
   Bentuk itu akan diubah menjadi pernyataan keadaan pada `T-085` WP-29 setelah
   seluruh WP kode selesai.
 - Tidak ada klaim FPS, latensi, atau bandwidth yang ditambahkan.
+
+### Log WP-32 (QC)
+
+Verdict: **PASS_WITH_NOTES**. Laporan: `.work/evidence/QC-WP-32.md`. Commit
+diperiksa: `dcbf9ad`.
+
+Kriteria terima terpenuhi dan dibuktikan ulang oleh QC:
+
+- `grep -n "Keadaan saat ini" README.md` → tanpa hasil.
+- `grep -nE "MicManager|FilterPipeline|StreamEncoder|TcpStreamServer|bindToLifecycle|RECORD_AUDIO|AiProcessor|/mic/toggle" README.md`
+  → tanpa hasil.
+- `grep -n "Plan_PenambalanTemuanKamera" README.md` → baris 23, 42, 68.
+- `./gradlew assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL in 8s`
+  (dijalankan QC sendiri).
+- Anti-ghost: header "Ditutup oleh" pada tabel ada di baseline (1) dan 0
+  sekarang; lima baris volatil di baseline menjadi 0; rujukan PLAN 1 → 3.
+
+Temuan (semua note, tidak menahan WP-05):
+
+- QC-22: bagian "Batas peran" masih memakai bentuk target ("Peran yang
+  dituju: ..."); akan diubah pada `T-085` WP-29 setelah semua WP kode selesai.
+- QC-23: README tidak lagi memberi ringkasan status dalam berkasnya sendiri.
+  Ini konsekuensi yang disengaja; ringkasan manual terbukti menjadi sumber
+  kesalahan berulang (QC-06..QC-08, QC-13, QC-17, QC-20).
+
+Dampak ke work package berikutnya: temuan QC-20 (baris audio README harus
+diperbarui pada WP-05) gugur karena baris tersebut sudah tidak ada.
+QC-21 (`AGENTS.md:44,67` masih menyebut `/mic/toggle`) tetap berlaku dan
+ditangani `T-077` WP-29. `README.md` tidak lagi perlu disentuh WP-05 dan WP
+berikutnya kecuali `T-085` di akhir pipeline.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 
