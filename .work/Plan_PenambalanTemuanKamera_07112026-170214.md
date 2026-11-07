@@ -908,17 +908,17 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-06 — Transformasi NV21 murni untuk rotasi frame
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/Nv21Transform.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/Nv21TransformTest.kt` (baru)
 
 Dependensi: WP-05.
 
 Tugas:
-- [ ] T-013 Implementasikan `rotateNv21(yuv: ByteArray, width: Int, height: Int, degrees: Int): ByteArray`
+- [x] T-013 Implementasikan `rotateNv21(yuv: ByteArray, width: Int, height: Int, degrees: Int): ByteArray`
       untuk 0/90/180/270 derajat, Kotlin murni tanpa `android.*`, dengan
       penanganan dimensi ganjil untuk bidang chroma (CWG-06, CWG-N01).
-- [ ] T-014 Tulis unit test: identitas pada 0 derajat, hasil 90 dan 270 saling
+- [x] T-014 Tulis unit test: identitas pada 0 derajat, hasil 90 dan 270 saling
       membalik, 180 dua kali kembali ke asal, dan penolakan derajat tidak sah
       (CWG-N06).
 
@@ -932,6 +932,91 @@ Kriteria terima:
 
 Risiko: rotasi bidang chroma salah pada dimensi ganjil sehingga warna bergeser.
 Mitigasi: test khusus lebar/tinggi ganjil; hasil visual tetap MANUAL-VERIFY.
+
+### Log WP-06 (Executor)
+
+Berkas berubah (2, sesuai daftar WP):
+`app/src/main/java/dev/ndeso17/camwastegreen/stream/Nv21Transform.kt` (baru),
+`app/src/test/java/dev/ndeso17/camwastegreen/stream/Nv21TransformTest.kt` (baru).
+
+Checklist:
+
+- [x] T-013 `Nv21Transform` dibuat sebagai `object` Kotlin murni di paket
+      `dev.ndeso17.camwastegreen.stream`. Isinya `rotateNv21(yuv, width,
+      height, degrees)` untuk 0/90/180/270 derajat searah jarum jam, plus
+      `chromaWidth`, `chromaHeight`, dan `nv21Size` sebagai helper.
+      Permukaan API:
+      `fun rotateNv21(yuv: ByteArray, width: Int, height: Int, degrees: Int): ByteArray`.
+      Luma dipetakan per piksel lewat `mapLuma`; chroma dipetakan per sel kisi
+      lewat `mapChroma` sehingga pasangan V,U tidak pernah terpisah. Sudut di luar
+      0/90/180/270, dimensi non-positif, dan buffer yang lebih kecil dari
+      `nv21Size` semuanya ditolak dengan `IllegalArgumentException`.
+      Dimensi ganjil ditangani dengan membulatkan kisi chroma ke atas
+      (`(w+1)/2` x `(h+1)/2`), dan ukuran hasil tetap sama dengan ukuran
+      masukan.
+      Verifikasi kemurnian: berkas **tidak punya satu pun baris `import`**
+      (`grep -n "^import"` → tanpa hasil), sehingga `android.*` mustahil
+      masuk.
+- [x] T-014 `Nv21TransformTest` dibuat dengan 10 kasus: identitas pada 0
+      derajat (termasuk pemeriksaan hasil bukan objek yang sama), pemetaan luma
+      90 derajat pada matriks 3x2, 90 lalu 270 kembali ke asal pada dimensi
+      ganjil 5x3, 180 dua kali kembali ke asal pada 5x3, 180 membalik kedua
+      sumbu, pasangan chroma tetap berpasangan pada 90 derajat, pembulatan
+      kisi chroma untuk 5x3, penolakan sudut tidak sah (45, 360, -90, 1),
+      penolakan dimensi tidak sah, dan penolakan buffer terlalu kecil.
+
+Output pemeriksaan (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "dev.ndeso17.camwastegreen.stream.Nv21TransformTest"
+  -> BUILD SUCCESSFUL; 10 test, 0 failure, 0 error
+     (app/build/test-results/testDebugUnitTest/TEST-dev.ndeso17.camwastegreen.stream.Nv21TransformTest.xml)
+grep -n "import android" app/src/main/java/dev/ndeso17/camwastegreen/stream/Nv21Transform.kt
+  -> tanpa hasil
+grep -n "^import" app/src/main/java/dev/ndeso17/camwastegreen/stream/Nv21Transform.kt
+  -> tanpa hasil
+./gradlew assembleDebug testDebugUnitTest -> BUILD SUCCESSFUL in 11s
+./gradlew lintDebug                       -> BUILD SUCCESSFUL in 24s; 0 error, 108 warning
+```
+
+Uji diskriminasi (mutasi sengaja): indeks luma untuk 90 derajat diubah dari
+`Pair(height - 1 - iy, ix)` menjadi `Pair(height - 1 - iy, width - ix)`, lalu
+test dijalankan ulang:
+
+```text
+-> 10 tests completed, 2 failed
+   rotateNinety_thenTwoSeventy_returnsOriginalOnOddDimensions FAILED
+   rotateNinety_mapsLumaClockwiseAndSwapsDimensions FAILED
+   BUILD FAILED
+```
+
+Mutasi dikembalikan dari salinan cadangan, `grep` mengonfirmasi baris kembali
+menjadi `90 -> Pair(height - 1 - iy, ix)`, dan test kembali
+`BUILD SUCCESSFUL`. Jadi test benar-benar menangkap rotasi salah, bukan
+sekadar menyatakan green.
+
+Catatan: satu kasus chroma sempat gagal pada percobaan pertama karena nilai
+harapan dihitung manual dengan urutan sel yang keliru. Implementasi sudah
+benar (pemetaan chroma mengikuti pemetaan luma yang sama); yang salah nilai
+harapan di test. Nilai harapan dikoreksi menjadi urutan sel `p2,p0,p3,p1`
+dan test hijau tanpa perubahan pada `Nv21Transform.kt`. Deviasi ini dicatat
+agar tidak tertukar dengan perbaikan kode.
+
+Kriteria terima terpenuhi: test targeted lulus dengan 10 kasus (melebihi
+minimal empat), mutasi terbukti terdeteksi, berkas bebas `import android`,
+build dan lint hijau.
+
+Deviasi: tidak ada. Dua berkas, satu WP.
+
+Keterbatasan:
+
+- `Nv21Transform` belum dipakai jalur sensor mana pun. Tersambung ke
+  `FilterPipeline` pada WP-14 (enkode JPEG tunggal) dan ke foreground service
+  pada WP-17/WP-18.
+- Kebenaran visual rotasi pada dimensi ganjil (pergeseran warna) belum dapat
+  dibuktikan tanpa perangkat; `MANUAL-VERIFY`.
+- Belum ada pengukuran FPS, latensi, atau bandwidth; WP ini tidak menambah
+  angka baru.
 
 ---
 
