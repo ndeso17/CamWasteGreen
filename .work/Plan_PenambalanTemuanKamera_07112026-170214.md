@@ -2240,19 +2240,19 @@ yang dihapus pada WP-16 dipakai kode aplikasi.
 
 ## WP-17 — `CameraService` foreground bertipe `camera`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt` (baru), `app/src/main/AndroidManifest.xml`
 
 Dependensi: WP-16.
 
 Tugas:
-- [ ] T-043 Buat `CameraService` sebagai foreground service dengan
+- [x] T-043 Buat `CameraService` sebagai foreground service dengan
       `android:foregroundServiceType="camera"`, kanal notifikasi, dan
       `startForeground` berisi status kamera dan jumlah klien (CWG-11).
-- [ ] T-044 Deklarasikan service pada manifest dengan `android:exported="false"`
+- [x] T-044 Deklarasikan service pada manifest dengan `android:exported="false"`
       dan tambahkan `android:foregroundServiceType="camera"` (CWG-11).
-- [ ] T-045 Laporkan kegagalan `startForeground` sebagai `cameraState` gagal,
+- [x] T-045 Laporkan kegagalan `startForeground` sebagai `cameraState` gagal,
       bukan exception yang mematikan proses (CWG-13).
 
 Kriteria terima:
@@ -2267,6 +2267,110 @@ Risiko: `ForegroundServiceStartNotAllowedException` pada Android 12+ bila
 service dimulai dari latar belakang.
 Mitigasi: service dimulai dari Activity atau dari `BootReceiver` dengan
 `startForegroundService`; kegagalan dicatat sebagai status (WP-19).
+
+### Log WP-17 (Executor)
+
+Berkas: `CameraService.kt` (baru, 232 baris) dan `AndroidManifest.xml`
+(penambahan deklarasi service).
+
+Checklist:
+
+- [x] T-043 `CameraService` dibuat sebagai foreground service. Kanal
+      notifikasi `camera_stream` (IMPORTANCE_LOW) dibuat di `onCreate`,
+      dan `startForeground` dipanggil dengan tipe `camera`. Isi notifikasi
+      memakai `MJPEGServerInstance.statusSnapshot()`: `cameraState`, alasannya
+      bila ada, dan jumlah klien. Notifikasi diperbarui tiap 5 detik.
+- [x] T-044 Service dideklarasikan di manifest dengan
+      `android:exported="false"` dan `android:foregroundServiceType="camera"`.
+- [x] T-045 Kegagalan `startForeground` ditangkap sebagai `Exception` lalu
+      dilaporkan lewat `MJPEGServerInstance.reportCameraError("foreground_start_failed")`
+      dan `stopSelf()`. Proses tidak dimatikan oleh exception.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "foregroundServiceType" app/src/main/AndroidManifest.xml
+  47:            android:foregroundServiceType="camera" />
+  (baris 47 adalah deklarasi <service android:name=".CameraService">)
+
+grep -n "startForeground" app/src/main/java/.../CameraService.kt
+  66:            ContextCompat.startForegroundService(context, intent)
+ 118:            ServiceCompat.startForeground(
+  -> satu pemanggilan startForeground (baris 118); baris 66 adalah
+     startForegroundService pada helper start(), bukan pemanggilan
+     startForeground.
+
+Manifest hasil merge (bukan hanya sumber):
+app/build/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml
+  android:name="dev.ndeso17.camwastegreen.CameraService"
+  android:exported="false"
+  android:foregroundServiceType="camera"
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 69 warning (sebelum WP-17: 0 error, 69 warning)
+```
+
+Temuan yang ditemukan dan diperbaiki sendiri selama WP ini:
+
+- Versi pertama memakai `Build.VERSION_CODES.Q` sebagai syarat
+  `FOREGROUND_SERVICE_TYPE_CAMERA`. Lint melaporkan `InlinedApi`: konstanta
+  itu baru ada pada API 30 (R). Syarat diubah ke `Build.VERSION_CODES.R`;
+  lint kembali 69 warning tanpa isu `CameraService`.
+
+Keterbatasan dan hal yang **belum** terbukti:
+
+- WP-17 hanya menambah wadah service. **Belum ada pemanggil**: `MainActivity`
+  masih mengikat kamera sendiri dan belum memanggil `CameraService.start()`,
+  sesuai pembagian WP-17/WP-18. Jadi perilaku stream tidak berubah dan
+  `MANUAL-VERIFY` "stream hidup saat layar mati" belum dapat diuji.
+- `CameraService.start()` memakai `ContextCompat.startForegroundService`,
+  yang melempar `ForegroundServiceStartNotAllowedException` pada Android 12+
+  bila dipanggil dari latar belakang. Helper ini belum dipanggil dari mana
+  pun, sehingga jalur itu belum dicoba di perangkat.
+- Izin `POST_NOTIFICATIONS` belum diminta di runtime. Pada Android 13+
+  notifikasi tidak tampil, tetapi service tetap berjalan; `updateNotification`
+  melewati `notify` bila izin belum ada. Permintaan izin masuk WP-18 (T-048).
+- `describe()` menulis `cameraState` mentah beserta label Indonesia. Ini
+  bukan klaim kesehatan kamera; nilainya sama dengan yang dilaporkan
+  `/status`.
+- APK debug belum dipasang ulang ke perangkat setelah WP-17.
+
+### Log WP-17 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- `grep -n "foregroundServiceType" app/src/main/AndroidManifest.xml`
+  → `camera` ditemukan.
+- `grep -n "startForeground" .../CameraService.kt` → satu pemanggilan
+  `ServiceCompat.startForeground` (baris 118).
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan ulang sendiri).
+- Isi diperiksa: manifest hasil merge memuat service dengan
+  `exported="false"` dan tipe `camera`; `CameraService` tidak menyentuh
+  `ProcessCameraProvider` maupun `MJPEGServerInstance.start`, sehingga
+  WP-18 masih dapat mengambil alih tanpa konflik; tidak ada `TODO` yang
+  menggantung.
+- Lint diperiksa ulang: 0 error, 69 warning, tidak ada isu bernama
+  `CameraService` (sebelumnya sempat muncul `InlinedApi` dan sudah
+  diperbaiki).
+
+Temuan:
+
+- QC-44: service belum punya pemanggil. Ini bukan cacat WP-17, tetapi
+  berarti klaim "stream tahan layar mati" belum boleh dibuat sampai WP-18
+  selesai dan MANUAL-VERIFY dijalankan.
+- QC-45: `CameraService.stop()` memakai `context.startService()` untuk
+  mengirim `ACTION_STOP`. Bila service belum berjalan, panggilan itu
+  memulainya sebentar lalu langsung menghentikannya; itu tidak berbahaya.
+  Yang perlu dijaga: pada Android 8+ `startService` dari latar belakang
+  dilarang. Karena helper ini dirancang dipanggil dari `MainActivity` yang
+  sedang terlihat, batasan itu belum menjadi masalah, tetapi WP-18 tidak
+  boleh memanggil `stop()` dari latar belakang.
+
+Dampak ke WP berikutnya: WP-18 wajib menangani dua hal yang terbuka di sini —
+permintaan izin `POST_NOTIFICATIONS`, dan memastikan `CameraService.stop()`
+hanya dipanggil saat aplikasi terlihat.
 
 ---
 
