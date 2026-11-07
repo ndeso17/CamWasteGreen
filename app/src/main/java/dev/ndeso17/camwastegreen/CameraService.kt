@@ -21,6 +21,9 @@ import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -318,9 +321,22 @@ class CameraService : Service(), LifecycleOwner {
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
 
+        // Resolusi diminta lewat ResolutionSelector (API yang tidak usang).
+        // Rasio 16:9 dipaksa lebih dulu agar kamera tidak memilih bingkai
+        // persegi; bila perangkat tidak punya 16:9, strategi jatuh ke rasio
+        // terdekat yang tersedia.
+        val resolutionStrategy = ResolutionStrategy(
+            Size(config.width, config.height),
+            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+        )
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+            .setResolutionStrategy(resolutionStrategy)
+            .build()
+
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setTargetResolution(Size(config.width, config.height))
+            .setResolutionSelector(resolutionSelector)
             .build()
 
         // H.264 stream encoder
