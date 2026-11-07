@@ -92,7 +92,7 @@ WP wajib menjaga build tetap hijau:
 
 ## WP-01 — Catat keputusan B-21, B-28, B-29 dan sinkronkan dokumen
 
-Status: qc
+Status: done
 
 File: `../.work/DECISIONS.md`, `../.work/FINDINGS.md`, `.work/PRD.md`, `.work/Architecture.md`
 
@@ -100,16 +100,16 @@ Dependensi: instruksi pengguna sesi 7 November 2026 (token statis, MIT, default
 stream). Tidak ada WP prasyarat.
 
 Tugas:
-- [ ] T-001 Catat D-27 (otorisasi token statis `X-Api-Key` yang dibaca dari
+- [x] T-001 Catat D-27 (otorisasi token statis `X-Api-Key` yang dibaca dari
       berkas di luar repo, pembatasan jaringan ruang kontrol), D-28 (lisensi MIT
       dan atribusi fork `ndeso17/ipcam`), dan D-29 (default stream 1280x720,
       20 FPS, quality 80, maks 2 klien sebagai **default konfigurasi**) beserta
       sumber persetujuan pengguna (CWG-08, CWG-15, CWG-N05).
-- [ ] T-002 Perbarui registri blocker: B-21, B-28, B-29 menjadi selesai dengan
+- [x] T-002 Perbarui registri blocker: B-21, B-28, B-29 menjadi selesai dengan
       rujukan D-27..D-29; tambahkan B-30 (status jalur H.264 `StreamEncoder`
       dan `TcpStreamServer`) sebagai terbuka dengan syarat pembukaan yang jelas
       (CWG-N02).
-- [ ] T-003 Sinkronkan `.work/PRD.md` bagian 5 dan 8 serta `.work/Architecture.md`
+- [x] T-003 Sinkronkan `.work/PRD.md` bagian 5 dan 8 serta `.work/Architecture.md`
       bagian 6 dengan keputusan tersebut, tanpa mengubah satu pun ID `CWG-`
       (CWG-01, CWG-15).
 
@@ -196,6 +196,63 @@ Keterbatasan:
 - Keputusan D-27 mencatat kelemahan cleartext secara eksplisit; tidak ada klaim
   bahwa token membuat stream aman pada jaringan yang disadap.
 - Alias `CWG-` masih menunggu pengesahan pengguna; traceability belum final.
+
+### Log WP-01 (QC)
+
+Verdict: **PASS_WITH_NOTES**. Laporan lengkap:
+`.work/evidence/QC-WP-01.md`. Commit yang diperiksa: `8cc5a85`.
+
+Perintah yang dijalankan QC sendiri:
+
+```text
+git rev-parse --show-toplevel            -> .../CamWasteGreen
+./gradlew assembleDebug testDebugUnitTest -> BUILD SUCCESSFUL in 6s
+./gradlew lintDebug                      -> BUILD FAILED; 1 error MicManager.kt:54
+                                            MissingPermission + 111 warning
+                                            (identik baseline c2bd177, bukan regresi)
+git show --check --format="" 8cc5a85     -> tanpa keluaran
+git ls-files | grep -E "local.properties|\.jks|\.keystore" -> tanpa hasil
+git check-ignore -v local.properties     -> .gitignore:16:local.properties
+```
+
+Kriteria terima 4/4 terpenuhi:
+
+- Tiga entri D-27/D-28/D-29 ada (`DECISIONS.md:739,769,789`), masing-masing
+  berstatus disetujui dan menyebut sumber persetujuan pengguna.
+- Registri `FINDINGS.md` baris 41/48/49/54/56: B-21 dan B-29 `**selesai**`,
+  B-28 `**selesai untuk sisi kamera**`, C-AUD-03 keputusan selesai,
+  B-30 `terbuka (baru)`; entri detail masing-masing memuat `Status:` baru.
+- PRD bagian 5 memuat `X-Api-Key` dan default stream (baris 112-117); PRD
+  bagian 8 memuat status baru dan B-30. Architecture bagian 6 tidak lagi
+  memuat `tertahan B-28` (baseline 1 hasil, sekarang 0) dan bagian 9
+  diperbarui.
+- ID `CWG-` tidak berubah: `diff` daftar ID unik antara `c2bd177` dan berkas
+  kerja tanpa selisih, 22 = 22; dijalankan dua kali dengan hasil identik.
+
+Uji anti-ghost: `X-Api-Key` pada PRD 0 pada baseline menjadi 2 sekarang,
+sehingga kriteria grep terbukti berdiskriminasi, bukan selalu benar.
+
+Kotak tugas T-001..T-003 dicentang oleh QC setelah tiap butir dibuktikan ulang
+(sebelumnya masih `[ ]` meski pekerjaan selesai — QC-03).
+
+Temuan note (tidak menahan WP-02):
+
+- QC-01: `CamWasteGreen/AGENTS.md` baris 27 dan 106-108 masih mencantumkan
+  B-21/B-28/B-29 sebagai blocker/terbuka. Berkas itu di luar daftar `File:`
+  WP-01; ditangani WP-29, yang perlu diperluas agar menyebut daftar blocker
+  secara eksplisit.
+- QC-02: `.work/DECISIONS.md` dan `.work/FINDINGS.md` root berada di luar repo
+  git mana pun sehingga D-27..D-29 tidak berriwayat versi. Konsekuensi
+  kontrak, bukan cacat WP-01.
+- QC-03: kotak tugas WP-01 tidak dicentang Executor (kini sudah).
+- QC-04: tag `CWG-N02` pada T-002 kurang tepat untuk B-30 (encoder H.264);
+  tag yang lebih tepat `CWG-N01`. Perbaikan tag diserahkan ke Planner saat
+  re-plan, tidak diubah diam-diam.
+- QC-05: `lintDebug` masih gagal 1 error lama `MicManager.kt:54`; ditutup
+  WP-05. Tidak ada klaim lint bersih.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push. Preseden push
+dicatat di `../.work/FINDINGS.md`.
 
 ---
 
