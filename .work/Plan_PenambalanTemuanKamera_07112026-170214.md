@@ -273,7 +273,7 @@ dicatat di `../.work/FINDINGS.md`.
 
 ## WP-02 — Lisensi MIT dan atribusi fork
 
-Status: qc
+Status: rework
 
 File: `LICENSE`, `README.md`
 
@@ -338,6 +338,50 @@ Keterbatasan:
 - README menyatakan pekerjaan audit belum selesai. Pernyataan itu wajib
   diperbarui pada WP-29 setelah WP-01..WP-31 selesai.
 - Tidak ada klaim mutu, FPS, atau latensi pada README.
+
+### Log WP-02 (QC)
+
+Verdict: **FAIL**. Laporan: `.work/evidence/QC-WP-02.md`. Commit diperiksa:
+`bb8ca06`.
+
+Kriteria terima terpenuhi 4/4 secara harfiah (`LICENSE` MIT valid,
+`README.md` menyebut `ndeso17/ipcam`, tidak ada berkas lokal/rahasia ter-track,
+`assembleDebug` lulus `BUILD SUCCESSFUL in 5s`). Yang gagal adalah akurasi isi
+README terhadap kode pada commit yang sama.
+
+Temuan blocker (dokumentasi):
+
+- QC-06: README menyatakan aplikasi tidak menjalankan ML Kit, padahal
+  `FilterPipeline.init` menetapkan `AiProcessor.isFaceDetectionEnabled = true`
+  dan `FilterPipeline.process` memanggil `AiProcessor.process` pada setiap
+  frame; `AiProcessor` membuat `FaceDetector()` saat inisialisasi
+  (`pipeline/FilterPipeline.kt:44,66`; `ai/AiProcessor.kt:11,16,18`).
+- QC-07: README menyatakan jalur sensor tanpa filter dan tanpa deteksi wajah,
+  padahal analyzer memanggil `FilterPipeline.process` yang melakukan dua kali
+  enkode JPEG (`compressToJpeg` + `Bitmap.compress`).
+- QC-08: README menyatakan audio dan mikrofon tidak dipakai, padahal
+  `MicManager`, `/mic/toggle`, tombol mikrofon, dan izin `RECORD_AUDIO` masih
+  ada (`MjpegHttpServer.kt:74`, `MainActivity.kt`, `AndroidManifest.xml`).
+
+Dasar: `AGENTS.md` bagian 7 melarang menyamarkan kemampuan yang belum tersedia
+sebagai implementasi lengkap. Kriteria WP yang berbunyi "menyatakan aplikasi
+tidak menjalankan inferensi" tidak membenarkan pernyataan bentuk sekarang yang
+salah; pernyataan itu harus berbentuk target sampai WP-03..WP-16 selesai.
+
+Rework:
+
+- [ ] REWORK-R1 Ubah klaim "Batas peran" pada `README.md` menjadi pernyataan
+      target, dan tambahkan bagian "Keadaan saat ini" yang menyebut ML Kit face
+      detection masih berjalan per frame, jalur sensor masih memakai filter dan
+      dua kali enkode JPEG, serta `MicManager`/`/mic/toggle`/`RECORD_AUDIO`
+      masih ada; sebutkan bahwa ketiganya dihapus pada WP-03 sampai WP-16.
+      Uji: `grep -n "Keadaan saat ini" README.md` menemukan bagian itu dan tidak
+      ada klaim bentuk sekarang tanpa penanda target.
+- [ ] REWORK-R2 Setelah REWORK-R1, buktikan kriteria WP tetap terpenuhi:
+      `grep -c "ndeso17/ipcam" README.md` = 1, `grep -c "MIT License" LICENSE`
+      = 1, `./gradlew assembleDebug` lulus. Catat keluaran pada Log WP.
+
+`LICENSE` tidak perlu diubah. Tidak ada push karena verdict FAIL.
 
 ---
 
