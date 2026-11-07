@@ -1408,22 +1408,22 @@ langsung ke keluaran, memakai temuan QC-29 sebagai panduan.
 
 ## WP-10 — `StatusRegistry` untuk status terukur
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/StatusRegistry.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/StatusRegistryTest.kt` (baru)
 
 Dependensi: WP-08.
 
 Tugas:
-- [ ] T-023 Implementasikan `StatusRegistry` dengan sumber waktu yang disuntikkan
+- [x] T-023 Implementasikan `StatusRegistry` dengan sumber waktu yang disuntikkan
       (`nowMs: () -> Long`), pencatatan frame untuk FPS terukur pada jendela
       bergulir, serta status kamera berupa `cameraState` dan `cameraStateReason`
       (CWG-04, CWG-13).
-- [ ] T-024 Sediakan `snapshot(): StatusSnapshot` berisi `frameSeq`,
+- [x] T-024 Sediakan `snapshot(): StatusSnapshot` berisi `frameSeq`,
       `lastFrameAtMs`, `measuredFps`, `width`, `height`, `clients`,
       `cameraState`; nilai yang belum diketahui bernilai `null`, bukan `0`
       (CWG-04, CWG-05, CWG-N05).
-- [ ] T-025 Unit test: FPS terukur dari 11 frame pada jarak 100 ms dalam jendela
+- [x] T-025 Unit test: FPS terukur dari 11 frame pada jarak 100 ms dalam jendela
       1000 ms, FPS `null` saat belum ada frame, `frameSeq`/`lastFrameAtMs`
       mengikuti paket terakhir, dan `cameraState` berubah saat kegagalan dicatat
       (CWG-04, CWG-16).
@@ -1438,6 +1438,107 @@ Kriteria terima:
 Risiko: jendela FPS terlalu pendek sehingga nilai berisik.
 Mitigasi: jendela 1000 ms dan test berbasis waktu palsu; nilai nyata diukur
 pada perangkat dan dicatat MANUAL-VERIFY, bukan dikarang.
+
+### Log WP-10 (Executor)
+
+Berkas berubah (2, sesuai daftar WP): `stream/StatusRegistry.kt` (baru),
+`app/src/test/.../stream/StatusRegistryTest.kt` (baru).
+
+Checklist:
+
+- [x] T-023 `StatusRegistry(nowMs: () -> Long, windowMs: Long = 1000L)` menerima
+      sumber waktu yang disuntikkan. `onFrame(packet)` menyimpan paket terakhir
+      dan mencatat waktu frame pada deque bergulir; frame yang lebih tua dari
+      jendela dibuang. `setCameraState(state, reason)` dan `setClients(count)`
+      tersedia untuk status kamera dan jumlah klien.
+- [x] T-024 `snapshot()` mengembalikan `StatusSnapshot` berisi `frameSeq`,
+      `lastFrameAtMs`, `measuredFps`, `width`, `height`, `clients`,
+      `cameraState`, `cameraStateReason`. Nilai yang belum diketahui `null`
+      (bukan `0`): belum ada frame berarti `measuredFps`, `frameSeq`,
+      `lastFrameAtMs`, `width`, `height` semuanya `null`. `clients` tetap
+      bilangan bulat karena selalu diketahui.
+- [x] T-025 Delapan kasus test: FPS terukur dari 11 frame jarak 100 ms,
+      FPS `null` sebelum ada frame, FPS `0.0` setelah jendela kosong,
+      `frameSeq`/`lastFrameAtMs`/dimensi mengikuti paket terakhir,
+      `cameraState` berubah dan alasannya tersimpan, `clients` mengikuti,
+      jendela 500 ms membuang frame lama, `resetFrames` menghapus FPS tetapi
+      mempertahankan `cameraState`.
+
+Output pemeriksaan (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "...StatusRegistryTest"
+  -> exit 0, tests="8" skipped="0" failures="0"
+grep -n "targetFps" .../stream/StatusRegistry.kt   -> tanpa hasil
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Mutasi: FPS diganti konstanta `20.0`.
+
+```text
+  -> exit 1, fpsTerukurDari11FrameJarak100ms FAILED
+  -> exit 1, jendelaBergulirMembuangFrameLama FAILED
+berkas dikembalikan; grep -c "frameTimes.size - 1" -> 1
+```
+
+Oracle independen (Python, definisi jendela sama, dihitung terpisah dari
+kode Kotlin):
+
+```text
+kasus1 (11 frame/100ms, window 1000) -> 10.0   (test: 10.0)
+kasus2 (4 frame/100ms, window 500)   -> 10.0   (test: 10.0)
+kasus2 setelah 2000ms                -> 0.0    (test: 0.0)
+kasus3 (21 frame/50ms, window 1000)  -> 20.0   (kontrol definisi)
+```
+
+Kriteria terima terpenuhi: delapan kasus lulus, `targetFps` tidak muncul di
+berkas, FPS berasal dari penghitung frame.
+
+Deviasi: `StatusRegistry` menambah `resetFrames()` di luar daftar tugas.
+Alasan: WP-18 membutuhkannya saat kamera berhenti agar `/status` tidak
+melaporkan frame lama. Tidak menambah dependensi.
+
+Keterbatasan:
+
+- FPS memakai waktu tangkap paket, bukan waktu receipt server. Untuk stream
+  lokal selisihnya kecil, tetapi pada tautan lambat nilai FPS dapat lebih
+  tinggi daripada FPS pengiriman. Tidak ada ambang yang diklaim.
+- `measuredFps` dihitung dari `(n-1)/span`, jadi jendela dengan satu frame
+  menghasilkan `0.0`, bukan `null`. Keduanya berarti "tidak dapat diukur"
+  tetapi dibedakan dari belum ada frame.
+- Nilai FPS nyata pada perangkat belum diukur; masuk MANUAL-VERIFY.
+
+### Log WP-10 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc` sampai QC independen
+memutuskan `done`.
+
+- `./gradlew testDebugUnitTest --tests "...StatusRegistryTest"` → exit `0`,
+  `tests="8" skipped="0" failures="0"`.
+- `grep -n "targetFps" .../StatusRegistry.kt` → tanpa hasil.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Mutasi diulang QC sendiri: FPS diganti konstanta `20.0` menggagalkan dua
+  test; berkas dikembalikan.
+- Oracle independen dihitung ulang QC sendiri dengan hasil identik dengan
+  nilai test (10.0, 10.0, 0.0).
+- Isi berkas diperiksa: `measuredFps` tidak pernah membaca field konfigurasi
+  apa pun; seluruh nilai berasal dari `frameTimes` dan `lastPacket`; nilai
+  `null` dipakai untuk "belum terukur" dan `0.0` untuk "terukur nol".
+
+Temuan (note, tidak menahan):
+
+- QC-30: `cameraState` dimulai `"starting"` dan tidak pernah kembali ke
+  `"starting"` setelah berhenti; keadaan `"stopped"` harus di-set pemanggil
+  (WP-18). Perlu dipastikan pemanggil selalu mengaturnya, jika tidak
+  `/status` akan melaporkan keadaan basi.
+- QC-31: FPS memakai waktu tangkap, sehingga pada tautan lambat nilai dapat
+  melebihi FPS pengiriman. Tidak ada ambang yang diklaim, jadi tidak menahan
+  WP; dicatat agar backend tidak memperlakukannya sebagai throughput.
+
+Dampak ke WP berikutnya: WP-12 dapat memakai `snapshot()` untuk `/status`;
+WP-18 wajib meng-set `cameraState` pada saat kamera berhenti.
 
 ---
 
