@@ -6,6 +6,25 @@ plugins {
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Properties
+
+/**
+ * Properti rahasia dibaca dari `local.properties` (di luar versi kontrol).
+ * Bila berkas atau kuncinya tidak ada, nilainya kosong dan build tetap jalan;
+ * server kemudian menolak melayani karena token kosong (WP-25).
+ */
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun secretProperty(name: String): String =
+    (localProperties.getProperty(name) ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+
+val apiKey: String = secretProperty("camwastegreen.apiKey")
+val allowedAddresses: String = secretProperty("camwastegreen.allowedAddresses")
 
 fun generateApkFileName(buildType: String): String {
     val now = Date()
@@ -28,6 +47,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // D-27: token statis untuk /video dan /status, plus daftar alamat
+        // yang diizinkan (dipisah koma; kosong berarti tanpa batas alamat).
+        buildConfigField("String", "API_KEY", "\"$apiKey\"")
+        buildConfigField("String", "ALLOWED_ADDRESSES", "\"$allowedAddresses\"")
     }
 
     buildTypes {
@@ -51,6 +75,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     applicationVariants.configureEach {
