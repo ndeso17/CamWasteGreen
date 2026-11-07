@@ -3493,24 +3493,24 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-33 — `NetworkChoice` murni untuk memilih interface jalur streaming
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/NetworkChoice.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/NetworkChoiceTest.kt` (baru)
 
 Dependensi: WP-01 (aturan test JVM murni). Dijadwalkan setelah WP-22.
 
 Tugas:
-- [ ] T-091 Buat `NetworkChoice` enum murni `ALL`, `WIFI_LAN`, `USB_TETHERING`
+- [x] T-091 Buat `NetworkChoice` enum murni `ALL`, `WIFI_LAN`, `USB_TETHERING`
       dengan label tampilan, tanpa `android.*` dan tanpa akses `NetworkInterface`.
-- [ ] T-092 Buat `NetworkCandidate(name: String, address: String)` dan fungsi murni
+- [x] T-092 Buat `NetworkCandidate(name: String, address: String)` dan fungsi murni
       `classify(interfaceName: String): NetworkChoice` yang memetakan
       `usb0`, `rndis0`, `eth0` ke `USB_TETHERING`, awalan `wlan` ke `WIFI_LAN`,
       dan nama lain ke `null` (tidak ditawarkan).
-- [ ] T-093 Buat `selectCandidates(choice: NetworkChoice, candidates: List<NetworkCandidate>): List<NetworkCandidate>`
+- [x] T-093 Buat `selectCandidates(choice: NetworkChoice, candidates: List<NetworkCandidate>): List<NetworkCandidate>`
       dan `resolveBindAddress(choice: NetworkChoice, candidates: List<NetworkCandidate>): String?`
       dengan `ALL` berarti bind `0.0.0.0` dan pilihan lain berarti alamat
       pertama yang cocok, atau `null` bila tidak ada yang cocok.
-- [ ] T-094 Unit test: setiap pilihan memilih kandidat yang benar, `USB_TETHERING`
+- [x] T-094 Unit test: setiap pilihan memilih kandidat yang benar, `USB_TETHERING`
       tanpa kandidat USB mengembalikan `null`, `ALL` selalu `0.0.0.0`, dan
       `classify` menolak nama yang tidak dikenal.
 
@@ -3527,6 +3527,83 @@ Mitigasi: `classify` hanya menerima nama yang terbukti dipakai (`usb0`,
 `rndis0`, `eth0`), dan `resolveBindAddress` mengembalikan `null` yang harus
 ditampilkan sebagai "interface tidak tersedia", bukan diam-diam jatuh ke
 `0.0.0.0`.
+
+### Log WP-33 (Executor)
+
+Berkas baru (2): `stream/NetworkChoice.kt` dan
+`test/.../stream/NetworkChoiceTest.kt`. Tidak ada berkas lain disentuh.
+`NetworkChoice` belum dipakai pemanggil mana pun; penerapannya WP-35.
+
+Checklist:
+
+- [x] T-091 `NetworkChoice` berisi tiga nilai: `ALL`, `WIFI_LAN`,
+      `USB_TETHERING`. Setiap nilai membawa `label` untuk UI dan
+      `storageValue` untuk penyimpanan, sehingga penyimpanan tidak bergantung
+      pada `enum.name` yang berubah bila konstanta dinamai ulang.
+- [x] T-092 `classify(interfaceName)` memetakan `usb0`/`rndis0`/`eth0` ke
+      `USB_TETHERING`, awalan `wlan` ke `WIFI_LAN`, dan nama lain ke `null`.
+- [x] T-093 `selectCandidates` dan `resolveBindAddress` disediakan. `ALL`
+      selalu `0.0.0.0`; pilihan lain memakai alamat kandidat pertama yang
+      cocok, atau `null`.
+- [x] T-094 Unit test berisi 8 kasus.
+
+Keputusan yang diambil saat menulis kode, beserta alasannya:
+
+- `resolveBindAddress` mengembalikan `null`, bukan jatuh ke `0.0.0.0`, saat
+  pilihan tidak tersedia. Diam-diam melebar ke semua interface akan
+  membatalkan tujuan pilihan ini tanpa terlihat oleh operator. Pemanggil
+  (WP-35) wajib menampilkan "interface tidak tersedia".
+- `eth0` dimasukkan ke USB tethering karena adapter Ethernet USB memakai nama
+  itu. Konsekuensinya tethering lewat Wi-Fi tidak tercakup pilihan ini; itu
+  memang di luar tiga opsi yang diminta pengguna.
+- `classify("swlan0")` sengaja diuji `null`: pencocokan memakai awalan, dan
+  `swlan0` bukan interface Wi-Fi Android yang dikenal.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+grep -n "android\." stream/NetworkChoice.kt
+  -> hanya baris komentar KDoc; tidak ada import android.*
+
+./gradlew testDebugUnitTest --tests "...NetworkChoiceTest"
+  -> BUILD SUCCESSFUL, exit 0
+  -> TEST-...NetworkChoiceTest.xml: tests="8" skipped="0" failures="0" errors="0"
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning; tidak ada isu yang menunjuk NetworkChoice
+```
+
+Kasus yang teruji (nama test):
+
+```text
+classify mengenali interface USB tethering
+classify mengenali awalan wlan
+classify menolak nama yang tidak dikenal
+selectCandidates menyaring sesuai pilihan
+resolveBindAddress ALL selalu 0_0_0_0
+resolveBindAddress mengembalikan alamat pertama yang cocok
+USB_TETHERING tanpa kandidat USB mengembalikan null
+setiap pilihan punya label dan nilai penyimpanan berbeda
+```
+
+Keterbatasan:
+
+- Daftar nama interface adalah daftar tetap dan **belum** diverifikasi
+  terhadap perangkat lain. Pada perangkat yang menamai interface tethering
+  dengan cara lain, pilihan akan dilaporkan tidak tersedia alih-alih salah
+  tebak.
+- Belum ada pembacaan interface nyata; itu WP-35, dan di sana pemetaan nama
+  ini baru terbukti cocok dengan kenyataan.
+
+### Log WP-33 (QC)
+
+Verdict: **PASS**, diperiksa sendiri oleh Executor; belum ada QC independen.
+Status dicatat `qc`.
+
+- 8 kasus uji lulus, termasuk dua kasus penolakan yang disengaja
+  (`swlan0`, daftar kandidat kosong).
+- Gerbang penuh lulus `exit 0`, lint 0 error, tanpa warning baru.
+- Tidak ada klaim bahwa pilihan ini sudah berpengaruh pada server; itu WP-35.
 
 ---
 
