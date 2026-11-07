@@ -10,7 +10,7 @@ import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.opengl.GLUtils
 import android.util.Log
-import dev.ndeso17.camwastegreen.FrameBuffer
+import dev.ndeso17.camwastegreen.MJPEGServerInstance
 import dev.ndeso17.camwastegreen.ai.AiProcessor
 import dev.ndeso17.camwastegreen.ai.AiResult
 import dev.ndeso17.camwastegreen.gpuimage.FilterManager
@@ -55,7 +55,14 @@ object FilterPipeline {
         isInitialized = false
     }
 
-    fun process(nv21: ByteArray, width: Int, height: Int, rotationDegrees: Int, quality: Int) {
+    fun process(
+        nv21: ByteArray,
+        width: Int,
+        height: Int,
+        rotationDegrees: Int,
+        quality: Int,
+        capturedAtMs: Long
+    ) {
         try {
             val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
             val jpegStream = ByteArrayOutputStream()
@@ -89,9 +96,14 @@ object FilterPipeline {
 
             val out = ByteArrayOutputStream()
             result.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            val jpeg = out.toByteArray()
+            // Dimensi dibaca sebelum recycle agar tidak bergantung pada bitmap
+            // yang sudah didaur ulang.
+            val outWidth = result.width
+            val outHeight = result.height
             if (result !== rotated) result.recycle()
             rotated.recycle()
-            FrameBuffer.latestFrame = out.toByteArray()
+            MJPEGServerInstance.publishFrame(jpeg, outWidth, outHeight, capturedAtMs)
         } catch (e: Exception) {
             Log.e(TAG, "Pipeline error: ${e.message}", e)
         }

@@ -1679,22 +1679,22 @@ yang `isSlowClient`.
 
 ## WP-12 — Server MJPEG baru berbasis `FrameSource` dan `StatusRegistry`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt` (baru), `app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/MJPEGServerInstance.kt`
 
 Dependensi: WP-09, WP-11.
 
 Tugas:
-- [ ] T-030 Pindahkan server ke `stream/MjpegHttpServer.kt`: `/video` memakai
+- [x] T-030 Pindahkan server ke `stream/MjpegHttpServer.kt`: `/video` memakai
       `MultipartWriter` dan hanya menulis paket baru, `/status` memakai
       `snapshot()` dari `StatusRegistry`, `/` menjadi halaman diagnostik tanpa
       tautan audio (CWG-01, CWG-03, CWG-04, CWG-05).
-- [ ] T-031 Terapkan `StreamSession` untuk batas klien dan penutupan pipa klien
+- [x] T-031 Terapkan `StreamSession` untuk batas klien dan penutupan pipa klien
       lambat; hentikan pola `Thread.sleep(50)` tanpa cek `seq` (CWG-09, CWG-10).
-- [ ] T-032 Perbarui `MJPEGServerInstance` agar memakai kelas baru dan menerima
+- [x] T-032 Perbarui `MJPEGServerInstance` agar memakai kelas baru dan menerima
       `FrameSource` serta `StatusRegistry` (CWG-01).
-- [ ] T-033 Hapus berkas `MjpegHttpServer.kt` lama (CWG-01).
+- [x] T-033 Hapus berkas `MjpegHttpServer.kt` lama (CWG-01).
 
 Kriteria terima:
 - `grep -n "Thread.sleep" app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt` kosong.
@@ -1707,6 +1707,119 @@ Kriteria terima:
 Risiko: perilaku klien MJPEG berubah sehingga pembaca lama gagal.
 Mitigasi: format multipart tetap sama; header tambahan bersifat aditif dan
 diuji di WP-09; verifikasi klien nyata MANUAL-VERIFY.
+
+### Log WP-12 (Executor)
+
+Berkas berubah (5, melebihi batas 1–5 tetapi masih di dalam pagar):
+`stream/MjpegHttpServer.kt` (baru), `MjpegHttpServer.kt` (lama, dihapus),
+`MJPEGServerInstance.kt`, `MainActivity.kt`, `pipeline/FilterPipeline.kt`.
+
+Checklist:
+
+- [x] T-030 Server pindah ke paket `stream`. `/video` menulis part lewat
+      `MultipartWriter.partHeader` + `packet.jpeg` + CRLF, hanya untuk paket
+      dengan `seq` baru. `/status` menjawab dari `StatusRegistry.snapshot()`
+      dengan `cameraState`, `cameraStateReason`, `frameSeq`, `lastFrameAtMs`,
+      `measuredFps`, `width`, `height`, `clients`. `/` menjadi halaman
+      diagnostik berisi tautan `/status` dan gambar `/video`; tidak ada tautan
+      audio dan tidak ada rute `/mic/toggle`.
+- [x] T-031 Satu `StreamSession` bersama (`clientSlots`) menegakkan
+      `maxClients` lintas koneksi; koneksi melebihi batas menerima `503`.
+      Tiap klien punya `StreamSession` sendiri untuk dedupe dan penanda lambat.
+      Penulis berhenti bila `isSlowClient` bernilai `true` setelah
+      `onWriteFinished`. Penungguan memakai `ReentrantLock` + `Condition`
+      (`awaitFrameAfter`), bukan jeda waktu tetap.
+- [x] T-032 `MJPEGServerInstance` memegang satu `FrameSource` dan satu
+      `StatusRegistry`, menyediakan `publishFrame`, `reportCameraError`,
+      `stop`, `statusSnapshot`. `shutdown()` dipanggil sebelum `stop()` agar
+      penulis pipa berhenti lebih dulu; `stop()` membersihkan frame dan
+      menetapkan `cameraState = stopped`.
+- [x] T-033 `MjpegHttpServer.kt` lama dihapus dengan `git rm`.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "Thread.sleep" .../stream/MjpegHttpServer.kt        -> tanpa hasil (exit 1)
+grep -n "X-Frame-...|measuredFps|cameraState" ...            -> 165,166,167,170 (field status)
+./gradlew assembleDebug testDebugUnitTest lintDebug          -> BUILD SUCCESSFUL, exit 0
+```
+
+Kriteria "menemukan rujukan header" dipenuhi lewat `MultipartWriter`: header
+`X-Frame-*` ditulis di `MultipartWriter.partHeader` (WP-09, diuji 7 kasus) dan
+dipanggil di baris 113 server. Pencarian langsung di berkas server hanya
+menemukan field status, sesuai catatan kriteria bahwa header boleh berasal
+dari `MultipartWriter`.
+
+Deviasi (dicatat jujur):
+
+- WP menyebut 3 berkas, pelaksanaan menyentuh 5. `MainActivity.kt` dan
+  `FilterPipeline.kt` harus diubah karena `MjpegHttpServer.currentFps` dan
+  `FrameBuffer.latestFrame` tidak ada lagi setelah T-033. Tanpa perubahan itu
+  build gagal, sehingga pekerjaan ini tidak dapat dipisah ke WP lain tanpa
+  meninggalkan pohon yang tidak dapat dikompilasi.
+- `FilterPipeline.process` mendapat parameter `capturedAtMs`, dan
+  `MJPEGServerInstance.publishFrame` menjadi satu-satunya jalan masuk frame.
+  Penyambungan penuh ke `FrameEncoder` tetap milik WP-14.
+- Dimensi hasil filter dibaca **sebelum** `result.recycle()`. Versi pertama
+  membaca `result.width` setelah recycle, yang bergantung pada perilaku
+  bitmap daur ulang; diperbaiki dalam WP yang sama.
+
+Keterbatasan:
+
+- `/video` masih memakai `PipedInputStream`/`PipedOutputStream`; penulisan
+  yang menggantung hanya diakhiri lewat penutupan pipa saat `shutdown()`,
+  bukan lewat batas waktu tulis sejati (lihat QC-32).
+- NanoHTTPD menangani tiap permintaan pada thread-nya sendiri, sedangkan
+  penulis pipa berjalan di `executor`. Bila klien berhenti membaca tanpa
+  menutup soket, data menumpuk di buffer pipa sampai 64 KiB lalu penulisan
+  memblokir; `isSlowClient` baru terlihat setelah penulisan selesai.
+- Belum ada klien nyata yang diuji, belum ada pengukuran FPS perangkat, dan
+  `401` untuk autentikasi belum ada (WP-22). Semua masuk MANUAL-VERIFY dan
+  WP berikutnya.
+- `MJPEGServerInstance.start` menerima `Context` tetapi tidak lagi memakainya
+  (dipakai untuk `applicationContext` di versi pertama, lalu dihapus karena
+  tidak diperlukan). Parameter dipertahankan agar tanda tangan pemanggil
+  tidak berubah dan akan dipakai WP-18 untuk `ForegroundService`.
+
+### Log WP-12 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc` sampai QC independen
+memutuskan `done`.
+
+- `grep -n "Thread.sleep" .../stream/MjpegHttpServer.kt` → tanpa hasil.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan ulang sendiri).
+- `grep -rn "MjpegHttpServer.currentFps\|MjpegHttpServer.currentQuality"` →
+  tidak ada lagi; satu-satunya kelas `MjpegHttpServer` ada di paket `stream`.
+- Isi berkas diperiksa: alur `/video` hanya menulis setelah
+  `shouldSend(packet)` benar; `lastSent` dimajukan **setelah** penulisan
+  berhasil; `clientSlots.release()` berada di blok `finally` sehingga slot
+  tidak bocor saat klien memutus; `shutdown()` menutup semua pipa sebelum
+  `executor.shutdownNow()`.
+- `MJPEGServerInstance.stop()` memanggil `shutdown()` lalu `stop()`, sesuai
+  catatan pada ringkasan WP bahwa urutan ini wajib.
+
+Temuan (note, tidak menahan):
+
+- QC-34: `/status` mengirim `"streaming": true` hanya bila
+  `cameraState == "streaming"`. Setelah `stop()` state menjadi `"stopped"`
+  sehingga `streaming` bernilai `false`; sudah benar, tetapi `streaming` dan
+  `cameraState` menyampaikan informasi yang tumpang tindih. Backend sebaiknya
+  memakai `cameraState`, bukan `streaming`.
+- QC-35: `StreamSession` per klien dibuat dengan `maxClients = 1`, sehingga
+  `tryAcquire()` pada sesi itu tidak pernah dipanggil. Dedupe dan penanda
+  lambat tetap berfungsi, tetapi parameter `maxClients` di situ tidak
+  bermakna dan berpotensi menyesatkan pembaca berikutnya.
+- QC-36: `MJPEGServerInstance.start(context, port)` tidak memakai `context`.
+  Lint tidak mengeluh karena parameter dipakai di tanda tangan API publik;
+  tetap dicatat agar WP-18 menghapus atau memakainya, bukan membiarkannya
+  menggantung.
+
+Dampak ke WP berikutnya: WP-13 menghapus menu filter dari `MainActivity`;
+WP-14 mengganti jalur analyzer menjadi `FrameEncoder` + `FrameSource.publish`
+dan menghapus `FrameBuffer`; WP-18 wajib mengisi `context` yang kini
+menggantung.
 
 ---
 

@@ -292,8 +292,6 @@ class MainActivity : AppCompatActivity() {
         tvQualityInfo.text = "Quality $qualityLabel"
         tvFpsValue.text = currentFps.toString()
         tvQualityValue.text = qualityLabel
-        MjpegHttpServer.currentFps = currentFps
-        MjpegHttpServer.currentQuality = currentQuality
 
         if (isStreaming && MJPEGServerInstance.isRunning()) {
             val ipAddress = getDeviceIpAddress()
@@ -389,6 +387,7 @@ class MainActivity : AppCompatActivity() {
                 return@setAnalyzer
             }
 
+            val capturedAtMs = System.currentTimeMillis()
             val currentTime = SystemClock.elapsedRealtime()
             val frameInterval = 1000 / currentFps
 
@@ -403,8 +402,10 @@ class MainActivity : AppCompatActivity() {
                 val nv21 = yuv420ToNv21(imageProxy)
                 val rotationDegrees = imageProxy.imageInfo.rotationDegrees
 
-                // MJPEG pipeline (existing)
-                FilterPipeline.process(nv21, imageProxy.width, imageProxy.height, rotationDegrees, currentQuality)
+                // MJPEG pipeline: hasil JPEG dipublikasikan ke MJPEGServerInstance
+                FilterPipeline.process(
+                    nv21, imageProxy.width, imageProxy.height, rotationDegrees, currentQuality, capturedAtMs
+                )
 
                 // H.264 pipeline (new)
                 streamEncoder?.let { enc ->
@@ -413,8 +414,11 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error pada analyzer: ${e.message}", e)
+                MJPEGServerInstance.reportCameraError("analyzer_failed")
                 val jpeg = imageProxyToJpegBytes(imageProxy)
-                if (jpeg != null) FrameBuffer.latestFrame = jpeg
+                if (jpeg != null) {
+                    MJPEGServerInstance.publishFrame(jpeg, imageProxy.width, imageProxy.height, capturedAtMs)
+                }
             } finally {
                 imageProxy.close()
             }
