@@ -772,15 +772,15 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-05 — Hapus `MicManager`, `EqualizerView`, izin audio, dan drawable mikrofon
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MicManager.kt` (hapus), `app/src/main/java/dev/ndeso17/camwastegreen/EqualizerView.kt` (hapus), `app/src/main/AndroidManifest.xml`, `app/src/main/res/drawable/ic_mic.xml` (hapus), `app/src/main/res/drawable/ic_mic_off.xml` (hapus)
 
 Dependensi: WP-03, WP-04.
 
 Tugas:
-- [ ] T-011 Hapus tiga berkas audio/equalizer (CWG-14).
-- [ ] T-012 Hapus `<uses-permission android:name="android.permission.RECORD_AUDIO" />`
+- [x] T-011 Hapus tiga berkas audio/equalizer (CWG-14).
+- [x] T-012 Hapus `<uses-permission android:name="android.permission.RECORD_AUDIO" />`
       dari manifest (CWG-14).
 
 Kriteria terima:
@@ -793,6 +793,70 @@ Kriteria terima:
 Risiko: drawable `ic_mic*` dipakai layout lain sehingga build gagal.
 Mitigasi: jalankan `grep -rn "ic_mic" app/src/main/res` sebelum menghapus;
 bila masih dipakai, hentikan WP dan catat temuan.
+
+### Log WP-05 (Executor)
+
+Berkas berubah (5, sesuai daftar WP):
+`MicManager.kt` (hapus), `EqualizerView.kt` (hapus), `ic_mic.xml` (hapus),
+`ic_mic_off.xml` (hapus), `AndroidManifest.xml`.
+
+Checklist:
+
+- [x] T-011 Empat berkas dihapus: `MicManager.kt` (kelas rekam audio),
+      `EqualizerView.kt` (visualizer), serta drawable `ic_mic.xml` dan
+      `ic_mic_off.xml`. Pemeriksaan pra-hapus `grep -rn "ic_mic" app/src` dan
+      `grep -rn "EqualizerView" app/src` sudah kosong, sehingga tidak ada
+      rujukan tersisa.
+- [x] T-012 Baris `<uses-permission android:name="android.permission.RECORD_AUDIO" />`
+      dihapus dari `AndroidManifest.xml`. Manifest kini memuat sembilan izin:
+      CAMERA, INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE,
+      FOREGROUND_SERVICE, FOREGROUND_SERVICE_CAMERA, WAKE_LOCK,
+      SYSTEM_ALERT_WINDOW, POST_NOTIFICATIONS.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -rn "RECORD_AUDIO\|MicManager\|EqualizerView" app/src   -> NONE
+grep -rn "MicManager\|EqualizerView\|ic_mic\|RECORD_AUDIO" --include=*.kt --include=*.xml --include=*.kts .
+                                                                  -> NONE (di luar app/build dan .work)
+./gradlew assembleDebug testDebugUnitTest -> BUILD SUCCESSFUL in 35s
+./gradlew lintDebug -> BUILD SUCCESSFUL in 33s; 0 error, 108 warning
+```
+
+Kriteria terima terpenuhi:
+
+- `assembleDebug` dan `testDebugUnitTest` lulus.
+- `lintDebug` **BUILD SUCCESSFUL** dengan **0 error** (sebelumnya 1 error
+  `MicManager.kt:54` `MissingPermission`). Warning turun 112 → 108.
+- `grep -rn "RECORD_AUDIO\|MicManager\|EqualizerView" app/src` → tanpa hasil.
+
+Penurunan warning diperiksa lewat `diff` dua daftar warning yang dinormalisasi
+(path dipangkas, nomor baris dibuang) antara WP-04 dan WP-05. Empat baris hilang
+dan tidak ada yang baru:
+
+```text
+- EqualizerView.kt: Use the KTX extension function String.toColorInt [UseKtx]
+- EqualizerView.kt: Use the KTX extension function String.toColorInt [UseKtx]
+- ic_mic_off.xml: The resource R.drawable.ic_mic_off appears to be unused [UnusedResources]
+- ic_mic.xml: The resource R.drawable.ic_mic appears to be unused [UnusedResources]
+```
+
+Keempat warning itu berasal dari berkas yang dihapus. Tidak ada warning baru.
+
+Deviasi: tidak ada. Numbered file list sudah memuat lima berkas; `README.md`
+tidak disentuh karena WP-32 menghapus tabel keadaan, sehingga tidak ada baris
+README yang perlu diperbarui (temuan QC-20 gugur).
+
+Keterbatasan:
+
+- `AGENTS.md:44,67` dan `.work/Structure.md` masih menyebut `MicManager.kt`,
+  `EqualizerView.kt`, `ic_mic*`, dan izin `RECORD_AUDIO`. Itu tugas `T-077`
+  dan `T-078` WP-29.
+- Tidak ada pengukuran perangkat pada WP ini. `MANUAL-VERIFY` untuk audio
+  (layar tidak meminta izin mikrofon, aplikasi tetap berjalan tanpa mikrofon)
+  tetap belum diuji.
+- Warning lint yang tersisa 108 seluruhnya non-blocking; daftar lengkap ada
+  pada `lint-results-debug.txt`.
 
 ---
 
