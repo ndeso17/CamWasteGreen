@@ -10,21 +10,16 @@ import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
-import android.view.Gravity
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import dev.ndeso17.camwastegreen.ai.AiProcessor
-import dev.ndeso17.camwastegreen.gpuimage.FilterType
-import dev.ndeso17.camwastegreen.pipeline.FilterPipeline
+import dev.ndeso17.camwastegreen.stream.FrameEncoder
 import com.google.android.material.bottomsheet.BottomSheetBehavior
-import java.io.ByteArrayOutputStream
 import java.net.NetworkInterface
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -49,14 +44,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvUsbStatus: TextView
     private lateinit var controlPanel: LinearLayout
     private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
-    private lateinit var coordinatorLayout: CoordinatorLayout
 
     // Filter menu
-    private lateinit var filterMenuContainer: FrameLayout
-    private lateinit var btnFilterToggle: ImageButton
-    private lateinit var filterChipsContainer: LinearLayout
-    private var isFilterMenuExpanded = false
-    private var selectedFilterChip: TextView? = null
 
     private var isStreaming = false
     private var currentFps = 20
@@ -86,10 +75,7 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupBottomSheet()
         setupButtonListeners()
-        setupFilterMenu()
         cameraExecutor = Executors.newSingleThreadExecutor()
-
-        FilterPipeline.init(this)
 
         if (allPermissionsGranted()) {
             updateUI()
@@ -116,90 +102,6 @@ class MainActivity : AppCompatActivity() {
         btnSwitchCamera = findViewById(R.id.btnSwitchCamera)
         btnOrientationLock = findViewById(R.id.btnOrientationLock)
         tvUsbStatus = findViewById(R.id.tvUsbStatus)
-        coordinatorLayout = findViewById(R.id.coordinator_layout)
-    }
-
-    private fun setupFilterMenu() {
-        // Inflate overlay
-        val overlay = layoutInflater.inflate(R.layout.overlay_filter_menu, coordinatorLayout, false)
-        coordinatorLayout.addView(overlay)
-
-        filterMenuContainer = overlay.findViewById(R.id.overlayFilterMenu)
-        btnFilterToggle = overlay.findViewById(R.id.btnFilterToggle)
-        filterChipsContainer = overlay.findViewById(R.id.filterChipsContainer)
-
-        // Position top-right, below status bar
-        val params = filterMenuContainer.layoutParams as CoordinatorLayout.LayoutParams
-        params.gravity = Gravity.TOP or Gravity.END
-        params.topMargin = resources.getDimensionPixelSize(R.dimen.filter_menu_top_margin)
-        params.rightMargin = resources.getDimensionPixelSize(R.dimen.filter_menu_right_margin)
-        filterMenuContainer.layoutParams = params
-
-        filterMenuContainer.visibility = View.GONE
-
-        btnFilterToggle.setOnClickListener {
-            isFilterMenuExpanded = !isFilterMenuExpanded
-            filterChipsContainer.visibility = if (isFilterMenuExpanded) View.VISIBLE else View.GONE
-        }
-
-        // Wire filter chips
-        val filterMap = mapOf(
-            R.id.chipNone to FilterType.NONE,
-            R.id.chipBeauty to FilterType.BEAUTY,
-            R.id.chipFaceBlur to FilterType.BLUR,
-            R.id.chipBgReplace to FilterType.BG_REPLACE,
-            R.id.chipSepia to FilterType.SEPIA,
-            R.id.chipGrayscale to FilterType.GRAYSCALE,
-            R.id.chipNegative to FilterType.NEGATIVE,
-            R.id.chipVignette to FilterType.VIGNETTE,
-            R.id.chipBrightness to FilterType.BRIGHTNESS,
-            R.id.chipContrast to FilterType.CONTRAST,
-            R.id.chipSaturation to FilterType.SATURATION,
-            R.id.chipGlow to FilterType.GLOW,
-            R.id.chipSketch to FilterType.SKETCH,
-            R.id.chipToon to FilterType.TOON,
-            R.id.chipPixelate to FilterType.PIXELATE,
-            R.id.chipKaleidoscope to FilterType.KALEIDOSCOPE
-        )
-
-        for ((chipId, filterType) in filterMap) {
-            val chip = overlay.findViewById<TextView>(chipId)
-            chip?.setOnClickListener {
-                selectFilterChip(chip, filterType)
-            }
-        }
-
-        // Select "None" by default
-        val noneChip = overlay.findViewById<TextView>(R.id.chipNone)
-        selectFilterChip(noneChip, FilterType.NONE)
-    }
-
-    private fun selectFilterChip(chip: TextView, filterType: FilterType) {
-        // Deselect previous
-        selectedFilterChip?.setBackgroundResource(R.drawable.bg_filter_chip)
-        selectedFilterChip?.setTextColor(Color.WHITE)
-
-        // Select new
-        chip.setBackgroundResource(R.drawable.bg_filter_chip_selected)
-        chip.setTextColor(Color.WHITE)
-        selectedFilterChip = chip
-
-        // Apply filter
-        FilterPipeline.isFaceBlurEnabled = false
-        FilterPipeline.isBgReplaceEnabled = false
-        when (filterType) {
-            FilterType.BLUR -> FilterPipeline.isFaceBlurEnabled = true
-            FilterType.BEAUTY -> FilterPipeline.activeFilter = FilterType.BEAUTY
-            FilterType.BG_REPLACE -> {
-                FilterPipeline.isBgReplaceEnabled = true
-                AiProcessor.isSegmentationEnabled = true
-            }
-            else -> {
-                FilterPipeline.activeFilter = filterType
-                AiProcessor.isSegmentationEnabled = false
-            }
-        }
-        Log.i(TAG, "Filter: ${filterType.displayName}")
     }
 
     private fun setupBottomSheet() {
@@ -228,11 +130,9 @@ class MainActivity : AppCompatActivity() {
             if (isStreaming) {
                 stopCamera()
                 isStreaming = false
-                filterMenuContainer.visibility = View.GONE
             } else {
                 startCamera()
                 isStreaming = true
-                filterMenuContainer.visibility = View.VISIBLE
             }
             updateUI()
         }
@@ -378,15 +278,14 @@ class MainActivity : AppCompatActivity() {
             streamEncoder = null
         }
 
-        var frameCount = 0L
-        val startTimeNs = System.nanoTime()
-
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             if (imageProxy.format != ImageFormat.YUV_420_888 || imageProxy.planes.size < 3) {
                 imageProxy.close()
                 return@setAnalyzer
             }
 
+            // Waktu tangkap diambil paling awal, sebelum konversi apa pun,
+            // supaya usia frame tidak lebih muda daripada kenyataan.
             val capturedAtMs = System.currentTimeMillis()
             val currentTime = SystemClock.elapsedRealtime()
             val frameInterval = 1000 / currentFps
@@ -396,29 +295,20 @@ class MainActivity : AppCompatActivity() {
                 return@setAnalyzer
             }
             lastFrameTimestamp = currentTime
-            frameCount++
 
             try {
-                val nv21 = yuv420ToNv21(imageProxy)
-                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-
-                // MJPEG pipeline: hasil JPEG dipublikasikan ke MJPEGServerInstance
-                FilterPipeline.process(
-                    nv21, imageProxy.width, imageProxy.height, rotationDegrees, currentQuality, capturedAtMs
-                )
-
-                // H.264 pipeline (new)
-                streamEncoder?.let { enc ->
-                    val ptsUs = (System.nanoTime() - startTimeNs) / 1000
-                    enc.encode(nv21, ptsUs)
+                val encoded = FrameEncoder.encode(imageProxy, currentQuality)
+                if (encoded == null) {
+                    // Kegagalan enkode dicatat sebagai alasan pada /status
+                    MJPEGServerInstance.reportCameraError("encode_failed")
+                } else {
+                    MJPEGServerInstance.publishFrame(
+                        encoded.jpeg, encoded.width, encoded.height, capturedAtMs
+                    )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error pada analyzer: ${e.message}", e)
                 MJPEGServerInstance.reportCameraError("analyzer_failed")
-                val jpeg = imageProxyToJpegBytes(imageProxy)
-                if (jpeg != null) {
-                    MJPEGServerInstance.publishFrame(jpeg, imageProxy.width, imageProxy.height, capturedAtMs)
-                }
             } finally {
                 imageProxy.close()
             }
@@ -471,62 +361,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         stopCamera()
         MJPEGServerInstance.stop()
-        FilterPipeline.shutdown()
         cameraExecutor.shutdown()
-    }
-
-    /** Fallback: original YUV-to-JPEG conversion if pipeline fails */
-    private fun imageProxyToJpegBytes(image: ImageProxy): ByteArray? {
-        val nv21 = yuv420ToNv21(image)
-        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
-        val out = ByteArrayOutputStream()
-        val success = yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), currentQuality, out)
-        if (!success) return null
-
-        val rotationDegrees = image.imageInfo.rotationDegrees
-        if (rotationDegrees != 0) {
-            val bmp = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
-            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-            val rotatedBmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-            bmp.recycle()
-            val rotatedStream = ByteArrayOutputStream()
-            rotatedBmp.compress(Bitmap.CompressFormat.JPEG, currentQuality, rotatedStream)
-            rotatedBmp.recycle()
-            return rotatedStream.toByteArray()
-        }
-        return out.toByteArray()
-    }
-
-    private fun yuv420ToNv21(image: ImageProxy): ByteArray {
-        val planes = image.planes
-        val yPlane = planes[0]
-        val uPlane = planes[1]
-        val vPlane = planes[2]
-        val yBuffer = yPlane.buffer
-        val uBuffer = uPlane.buffer
-        val vBuffer = vPlane.buffer
-        val ySize = yBuffer.remaining()
-        val uSize = uBuffer.remaining()
-        val vSize = vBuffer.remaining()
-
-        val nv21 = ByteArray(ySize + uSize + vSize)
-        yBuffer.get(nv21, 0, ySize)
-
-        var uvPosition = ySize
-        val vRowStride = vPlane.rowStride
-        val vPixelStride = vPlane.pixelStride
-        val uRowStride = uPlane.rowStride
-        val uPixelStride = uPlane.pixelStride
-
-        for (row in 0 until image.height / 2) {
-            for (col in 0 until image.width / 2) {
-                val vPos = row * vRowStride + col * vPixelStride
-                val uPos = row * uRowStride + col * uPixelStride
-                nv21[uvPosition++] = vBuffer.get(vPos)
-                nv21[uvPosition++] = uBuffer.get(uPos)
-            }
-        }
-        return nv21
     }
 
     private fun getUsbTetheringIp(): String {

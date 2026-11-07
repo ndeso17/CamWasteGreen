@@ -1825,16 +1825,16 @@ menggantung.
 
 ## WP-13 — Hapus menu filter dari `MainActivity`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`
 
 Dependensi: WP-12.
 
 Tugas:
-- [ ] T-034 Hapus `setupFilterMenu`, `selectFilterChip`, field menu filter, dan
+- [x] T-034 Hapus `setupFilterMenu`, `selectFilterChip`, field menu filter, dan
       pemanggilan `FilterPipeline.init` serta `FilterPipeline.shutdown` (CWG-N02).
-- [ ] T-035 Hapus impor `AiProcessor`, `FilterType`, dan `FilterPipeline`
+- [x] T-035 Hapus impor `AiProcessor`, `FilterType`, dan `FilterPipeline`
       (CWG-N02).
 
 Kriteria terima:
@@ -1847,23 +1847,85 @@ Risiko: penghapusan menyisakan referensi `R.id.chip*` yang tidak ada.
 Mitigasi: build wajib lulus; bila gagal, perbaiki dalam WP yang sama sebelum
 menyerahkan ke QC.
 
+### Log WP-13 (Executor)
+
+Berkas berubah (1, sesuai daftar WP): `MainActivity.kt`.
+
+**Urutan pengerjaan dibalik: WP-13 dikerjakan bersama WP-14.** Alasan: kriteria
+WP-13 menuntut `grep "FilterPipeline"` kosong di `MainActivity.kt`, tetapi
+pemanggilan `FilterPipeline.process` di analyzer baru hilang pada WP-14
+(T-036). Mengubah urutan menjadi WP-13 lebih dulu akan meninggalkan pohon yang
+tidak dapat dikompilasi, atau memaksa WP-13 gagal kriterianya sendiri.
+Keduanya dikerjakan dalam satu perubahan dan dicatat sebagai dua log WP.
+
+Checklist:
+
+- [x] T-034 `setupFilterMenu()` dan `selectFilterChip(chip, filterType)`
+      dihapus beserta pemanggilannya di `onCreate`. Field menu filter
+      (`filterMenuContainer`, `btnFilterToggle`, `filterChipsContainer`,
+      `isFilterMenuExpanded`, `selectedFilterChip`) dihapus, begitu juga dua
+      baris `visibility` di listener `btnRecordBg` yang menyentuh
+      `filterMenuContainer`. `FilterPipeline.init(this)` dan
+      `FilterPipeline.shutdown()` dihapus dari `onCreate`/`onDestroy`.
+- [x] T-035 Impor `dev.ndeso17.camwastegreen.ai.AiProcessor`,
+      `...gpuimage.FilterType`, dan `...pipeline.FilterPipeline` dihapus.
+      Impor yang menjadi mati ikut dibuang: `android.view.Gravity`,
+      `java.io.ByteArrayOutputStream`, dan
+      `androidx.coordinatorlayout.widget.CoordinatorLayout` beserta field
+      `coordinatorLayout` yang hanya dipakai menu filter.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "FilterPipeline|AiProcessor|FilterType|overlay_filter_menu" MainActivity.kt
+  -> tanpa hasil (exit 1)
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Keterbatasan:
+
+- Layout `res/layout/overlay_filter_menu.xml` dan drawable `bg_filter_chip*`
+  masih ada di repo. Penghapusan layout dijadwalkan WP-15; drawable
+  `bg_filter_chip*` tidak tercantum pada WP mana pun dan dicatat sebagai
+  temuan QC-37 agar tidak hilang dari rencana.
+- `coordinator_layout` di `activity_main.xml` kini tidak lagi dipakai kode.
+  Dibiarkan karena masih menjadi akar tata letak; menghapusnya berarti
+  menyentuh layout dan di luar lingkup WP ini.
+
+### Log WP-13 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- Grep kriteria → kosong (exit 1).
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Isi diperiksa: tidak ada `R.id.chip*` tersisa, tidak ada pemanggilan
+  `FilterPipeline` di `onCreate`/`onDestroy`, dan listener `btnRecordBg` tetap
+  mengubah `isStreaming` lalu memanggil `updateUI()`.
+
+Temuan:
+
+- QC-37: drawable `bg_filter_chip` dan `bg_filter_chip_selected` menjadi yatim
+  setelah WP-13. Belum ada WP yang menghapusnya. Usul: gabungkan ke WP-15.
+
 ---
 
 ## WP-14 — Jalur analyzer memakai `FrameEncoder` dan `FrameSource`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/FrameBuffer.kt` (hapus)
 
 Dependensi: WP-07, WP-08, WP-12, WP-13.
 
 Tugas:
-- [ ] T-036 Ganti isi analyzer: ambil `imageProxy`, catat `capturedAtMs` saat
+- [x] T-036 Ganti isi analyzer: ambil `imageProxy`, catat `capturedAtMs` saat
       frame diterima, panggil `FrameEncoder.encode`, lalu `FrameSource.publish`
       dengan lebar/tinggi hasil rotasi (CWG-02, CWG-N01, CWG-N04).
-- [ ] T-037 Hapus jalur cadangan `imageProxyToJpegBytes` dan pemakaian
+- [x] T-037 Hapus jalur cadangan `imageProxyToJpegBytes` dan pemakaian
       `FrameBuffer`; hapus `FrameBuffer.kt` (CWG-N01).
-- [ ] T-038 Catat kegagalan enkode ke `StatusRegistry` sebagai `cameraState`
+- [x] T-038 Catat kegagalan enkode ke `StatusRegistry` sebagai `cameraState`
       beserta alasan, bukan hanya `Log.e` (CWG-13, CWG-16).
 
 Kriteria terima:
@@ -1877,6 +1939,87 @@ Risiko: waktu tangkap diambil terlalu akhir sehingga usia frame lebih muda
 daripada kenyataan.
 Mitigasi: `capturedAtMs` diambil pada baris pertama analyzer sebelum konversi;
 dinyatakan di Log dan diuji perilakunya pada WP-08.
+
+### Log WP-14 (Executor)
+
+Berkas berubah (2, sesuai daftar WP): `MainActivity.kt`,
+`FrameBuffer.kt` (dihapus dengan `git rm`).
+
+Checklist:
+
+- [x] T-036 Analyzer sekarang memanggil
+      `FrameEncoder.encode(imageProxy, currentQuality)`. `capturedAtMs` diambil
+      pada baris pertama setelah pemeriksaan format, sebelum konversi atau
+      pemanggilan enkode. Hasil `EncodedFrame` diteruskan ke
+      `MJPEGServerInstance.publishFrame(encoded.jpeg, encoded.width,
+      encoded.height, capturedAtMs)`, sehingga lebar/tinggi adalah dimensi
+      **hasil rotasi** dari WP-07, bukan dimensi sensor mentah.
+- [x] T-037 `imageProxyToJpegBytes` dihapus. `yuv420ToNv21` ikut dihapus karena
+      satu-satunya pemanggilnya adalah jalur lama dan analyzer baru;
+      konversi NV21 kini dimiliki `FrameEncoder.toNv21`. `FrameBuffer.kt`
+      dihapus dengan `git rm`.
+- [x] T-038 Kegagalan enkode dicatat lewat
+      `MJPEGServerInstance.reportCameraError("encode_failed")` ketika
+      `FrameEncoder.encode` mengembalikan `null`, dan
+      `reportCameraError("analyzer_failed")` ketika analyzer melempar
+      exception. Keduanya mengisi `cameraState = error` beserta alasan pada
+      `/status`, bukan hanya `Log.e`.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -rn "FrameBuffer" app/src                            -> tanpa hasil (exit 1)
+grep -c "compressToJpeg|Bitmap.compress" MainActivity.kt  -> 0
+./gradlew assembleDebug testDebugUnitTest lintDebug       -> BUILD SUCCESSFUL, exit 0
+```
+
+Kesalahan yang terjadi dan diperbaiki dalam WP yang sama: build pertama gagal
+dengan `Unresolved reference 'FrameEncoder'` karena impor
+`dev.ndeso17.camwastegreen.stream.FrameEncoder` belum ditambahkan. Impor
+ditambahkan, build ulang lulus.
+
+Deviasi: `FilterPipeline.process` tidak lagi dipanggil dari analyzer. Berkas
+`FilterPipeline.kt` sendiri masih ada dan baru dihapus WP-15, sesuai daftar
+`File:` masing-masing WP. Sampai WP-15 selesai, `FilterPipeline` hanya ikut
+terkompilasi dan tidak berada di jalur sensor.
+
+Keterbatasan:
+
+- Jalur H.264 (`StreamEncoder`) masih dibuat dan dimulai di
+  `bindCameraUseCases`, tetapi pemanggilan `enc.encode(nv21, ptsUs)` ikut
+  terhapus bersama blok analyzer lama sehingga encoder tidak lagi menerima
+  frame. Penghapusan menyeluruh milik WP-31.
+- Frame yang gagal dienkode tidak dikirim dan tidak diganti frame sintetis.
+  Klien akan melihat frame terakhir bertahan; `/status` melaporkan alasannya.
+- Rotasi dicatat pada `imageInfo.rotationDegrees`; perilaku pada perangkat
+  yang diputar belum diverifikasi (MANUAL-VERIFY).
+
+### Log WP-14 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- `grep -rn "FrameBuffer" app/src` → tanpa hasil.
+- `grep -c "compressToJpeg|Bitmap.compress" MainActivity.kt` → `0`.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Isi diperiksa: `capturedAtMs` berada sebelum `FrameEncoder.encode`; dimensi
+  yang dipublikasikan berasal dari `encoded.width/height`; blok `finally`
+  tetap menutup `imageProxy`; tidak ada jalur kedua yang menulis frame.
+
+Temuan:
+
+- QC-38: `imageProxy.close()` dipanggil di tiga tempat (dua early-return dan
+  satu `finally`). Sudah benar, tetapi mudah rusak bila ditambah early-return
+  baru tanpa `close()`. Dicatat agar perubahan berikutnya memakai satu
+  `finally`.
+- QC-39: `currentQuality` masih dipakai sebagai parameter kualitas enkode dan
+  dapat diubah operator saat stream berjalan. `FrameEncoder` menerima nilai
+  itu per frame, jadi tidak ada cache yang perlu dibersihkan; dicatat sebagai
+  perilaku yang disengaja.
+
+Dampak ke WP berikutnya: WP-15 dapat menghapus `FilterPipeline`, paket `ai`,
+dan layout menu filter; WP-31 menghapus `StreamEncoder`/`TcpStreamServer`.
 
 ---
 
