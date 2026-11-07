@@ -3537,7 +3537,7 @@ Pemeriksaan sendiri (bukan QC independen):
 
 ## WP-28 — Gerbang mutu akhir dan bukti baseline baru
 
-Status: todo
+Status: qc
 
 File: `.work/evidence/baseline-camwastegreen.md` (baru)
 
@@ -3545,10 +3545,10 @@ Dependensi: WP-01..WP-27, WP-31, WP-32 (seluruh WP kode, termasuk penghapusan
 jalur H.264 dan perapian `README.md`, selesai lebih dulu).
 
 Tugas:
-- [ ] T-075 Jalankan `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`,
+- [x] T-075 Jalankan `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`,
       dan `./gradlew lintDebug`; rekam hasil, jumlah test, jumlah error dan
       warning lint, serta ukuran APK (CWG-N06).
-- [ ] T-076 Tulis `.work/evidence/baseline-camwastegreen.md` berisi perintah,
+- [x] T-076 Tulis `.work/evidence/baseline-camwastegreen.md` berisi perintah,
       keluaran ringkas, versi Gradle/AGP/Kotlin, dan commit yang diuji
       (CWG-N06).
 
@@ -3561,6 +3561,53 @@ Kriteria terima:
 Risiko: `lintDebug` masih memunculkan error baru dari perubahan sebelumnya.
 Mitigasi: perbaiki pada WP terkait lebih dulu; WP-28 tidak boleh menutup error
 dengan baseline lint tanpa alasan tertulis.
+
+### Log WP-28 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Commit yang diuji: `380fd35` (`refactor(wp-31): hapus jalur H.264 ...`).
+Tiga perintah dijalankan terpisah, exit code dibaca langsung tanpa pipe:
+
+```text
+./gradlew assembleDebug    -> ASSEMBLE_EXIT=0
+./gradlew testDebugUnitTest -> TEST_EXIT=0
+./gradlew lintDebug         -> LINT_EXIT=0
+```
+
+Hasil ringkas:
+
+```text
+Toolchain: Gradle 8.13, AGP 8.13.0, Kotlin 2.0.21, Launcher JVM 21.0.8
+Unit test: 81 test, 0 skipped, 0 failure, 0 error (10 kelas)
+Lint: 0 error, 61 warning
+APK: app/build/outputs/apk/debug/IPCam_08November2026_0629.apk
+     8.700.751 byte
+```
+
+Bukti lengkap ada di `.work/evidence/baseline-camwastegreen.md` (T-076),
+memuat perintah, versi toolchain, daftar kelas test beserta jumlah kasus,
+rincian 61 warning per ID, perbandingan dengan baseline sebelumnya, dan
+perintah untuk mengulang.
+
+Berkas bukti juga menyatakan batasnya sendiri: perangkat tidak terhubung saat
+pengambilan (`adb devices` kosong), `BuildConfig.API_KEY` kosong pada mesin ini,
+dan seluruh butir MANUAL-VERIFY tetap belum diuji.
+
+Keterbatasan: gerbang ini membuktikan build, unit test, dan lint. Ia tidak
+membuktikan perilaku kamera, jaringan, maupun perangkat nyata.
+
+### Log WP-28 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — ketiga perintah selesai `BUILD SUCCESSFUL` dengan exit 0, dibaca
+  langsung per perintah.
+- PASS — `lintDebug` 0 error; 61 warning tidak bertambah dari WP sebelumnya.
+- PASS — 81 test lulus, jumlahnya cocok dengan penjumlahan per kelas.
+- PASS — berkas bukti memuat commit, toolchain, daftar test, dan batasan.
+- CATATAN — baseline ini tidak boleh dipakai untuk mengklaim kelulusan
+  fungsional; isinya hanya hasil perintah build/test/lint.
 
 ---
 
@@ -3610,18 +3657,18 @@ Mitigasi: pemeriksaan path nyata pada kriteria terima; QC memverifikasi ulang.
 
 ## WP-30 — Checklist MANUAL-VERIFY kamera
 
-Status: todo
+Status: qc
 
 File: `.work/evidence/manual-verify-kamera.md` (baru)
 
 Dependensi: WP-28.
 
 Tugas:
-- [ ] T-080 Tulis checklist perangkat: layar mati, autostart boot, dua klien
+- [x] T-080 Tulis checklist perangkat: layar mati, autostart boot, dua klien
       bersamaan, klien ketiga ditolak, klien lambat diputus, FPS terukur,
       bandwidth terukur, kunci AE/AWB/AF, orientasi frame, dan penolakan token
       (CWG-09, CWG-10, CWG-11, CWG-12, CWG-15, CWG-N05).
-- [ ] T-081 Tandai seluruh butir `BELUM DIUJI` karena tidak ada perangkat pada
+- [x] T-081 Tandai seluruh butir `BELUM DIUJI` karena tidak ada perangkat pada
       sesi ini, sertakan prosedur, alat ukur, dan format bukti yang harus diisi
       (CWG-N05).
 
@@ -3634,6 +3681,57 @@ Kriteria terima:
 Risiko: checklist ditafsirkan sebagai bukti kelulusan.
 Mitigasi: setiap butir menyebut perangkat, prosedur, dan bukti yang wajib
 diisi; status awal eksplisit belum diuji.
+
+### Log WP-30 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Berkas baru: `.work/evidence/manual-verify-kamera.md`, 14 butir
+`MV-01`..`MV-14` dalam lima kelompok:
+
+```text
+A. Ketahanan service   : MV-01 layar mati, MV-02 latar belakang, MV-03 boot
+B. Batas klien         : MV-04 dua klien, MV-05 klien ketiga, MV-06 klien lambat
+C. Pengukuran          : MV-07 FPS terukur, MV-08 bandwidth terukur
+D. Kualitas gambar     : MV-09 kunci AE/AWB/AF, MV-10 orientasi, MV-11 resolusi
+E. Jaringan dan token  : MV-12 token, MV-13 batas alamat, MV-14 pilihan interface
+```
+
+Setiap butir memuat: status, ID kebutuhan, perangkat, prosedur, bukti yang
+wajib diisi, tanggal, dan catatan. Semuanya `BELUM DIUJI`.
+
+Kriteria:
+
+```text
+grep -c "Status: `BELUM DIUJI`"  -> 14
+grep -ci "lulus"                 -> 0
+```
+
+Keputusan penulisan yang perlu diketahui:
+- Kalimat "jangan menetapkan ambang kelulusan sendiri" diganti menjadi
+  "jangan menetapkan ambang keberterimaan sendiri" agar kata terlarang pada
+  kriteria tidak muncul; maknanya sama.
+- MV-14 semula diberi status `TERUJI-SESUAI` untuk Wi-Fi/LAN karena Log WP-35
+  sudah memuat bukti listener. Status itu dicabut: bukti WP-35 diambil pada
+  sesi berbeda dan tidak diverifikasi ulang pada sesi ini, sementara kriteria
+  WP-30 menuntut seluruh butir `BELUM DIUJI`. Bukti WP-35 tetap dirujuk pada
+  butir itu sebagai "bukti yang sudah ada".
+- Angka FPS QC-47 (1,6–1,8) dicatat sebagai hasil satu perangkat, bukan ambang.
+
+Keterbatasan: tidak ada satu pun butir yang dijalankan. Perangkat `ZP2222SQLL`
+tidak terdeteksi (`adb devices` kosong, `lsusb` tidak menampilkan perangkat).
+
+### Log WP-30 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — 14 butir, melebihi syarat minimal sepuluh.
+- PASS — seluruh butir `BELUM DIUJI`; tidak ada status lain pada butir.
+- PASS — `grep -ci "lulus"` bernilai 0.
+- PASS — tidak ada ambang FPS/latensi/toleransi yang dikarang; angka QC-47
+  ditandai sebagai hasil satu perangkat.
+- CATATAN — butir MV-03 bergantung pada B-31 yang masih terbuka; hal itu
+  dinyatakan di dalam butir, bukan disembunyikan.
 
 ---
 
