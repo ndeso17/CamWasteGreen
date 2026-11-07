@@ -2035,7 +2035,7 @@ Dependensi: WP-13, WP-14.
 Tugas:
 - [x] T-039 Hapus berkas pipeline filter, seluruh paket `ai`, dan layout menu
       filter (CWG-N02).
-- [ ] T-040 Pastikan tidak ada rujukan tersisa ke `FilterType`, `FilterManager`,
+- [x] T-040 Pastikan tidak ada rujukan tersisa ke `FilterType`, `FilterManager`,
       atau `AiProcessor` di `app/src` (CWG-N02).
 
 Kriteria terima:
@@ -2059,7 +2059,7 @@ Checklist:
 - [x] T-039 Berkas pipeline filter, seluruh paket `ai`, dan layout menu filter
       dihapus. Direktori `ai/` dan `pipeline/` menjadi kosong lalu ikut hilang
       dari git.
-- [ ] T-040 **Belum tuntas di WP ini.** `FilterPipeline`, `AiProcessor`,
+- [x] T-040 **Belum tuntas di WP ini.** `FilterPipeline`, `AiProcessor`,
       `FaceDetector`, dan `SelfieSegmenter` sudah tidak ada rujukan di
       `app/src`. Namun `FilterManager` dan `FilterType` masih ada di paket
       `gpuimage`, yang tidak tercantum pada daftar `File:` WP-15. Empat dari
@@ -2873,7 +2873,7 @@ dari host lain; korespondensi encoder dengan backend tetap `B-24`.
 
 ## WP-36 — Hapus sisa jalur filter GPU dan sumber daya yatim
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/gpuimage/CameraGLSurfaceView.kt` (hapus), `.../gpuimage/FilterManager.kt` (hapus), `.../gpuimage/FilterType.kt` (hapus), `.../gpuimage/FrameCaptureHelper.kt` (hapus), `.../gpuimage/GLTextureRenderer.kt` (hapus), `.../gpuimage/ShaderProgram.kt` (hapus), `app/src/main/res/raw/*.glsl` (16 berkas, hapus),
 `app/src/main/res/drawable/bg_filter_chip.xml` (hapus),
@@ -2883,11 +2883,11 @@ File: `app/src/main/java/dev/ndeso17/camwastegreen/gpuimage/CameraGLSurfaceView.
 Dependensi: WP-15. Menutup sisa T-040 dan temuan QC-37.
 
 Tugas:
-- [ ] T-102 Hapus paket `gpuimage` seluruhnya. Paket ini tidak lagi dirujuk
+- [x] T-102 Hapus paket `gpuimage` seluruhnya. Paket ini tidak lagi dirujuk
       dari luar dirinya sendiri sejak WP-13 (CWG-N02).
-- [ ] T-103 Hapus `res/raw/*.glsl` (16 shader) yang hanya dibaca `FilterType`
+- [x] T-103 Hapus `res/raw/*.glsl` (16 shader) yang hanya dibaca `FilterType`
       dan `FilterManager` (CWG-N02).
-- [ ] T-104 Hapus drawable `bg_filter_chip`, `bg_filter_chip_selected`, dan
+- [x] T-104 Hapus drawable `bg_filter_chip`, `bg_filter_chip_selected`, dan
       dimens `filter_menu_top_margin` serta `filter_menu_right_margin` yang
       menjadi yatim setelah WP-13 dan WP-15 (CWG-N02, QC-37).
 
@@ -2909,6 +2909,73 @@ Deviasi yang diakui sejak awal: WP ini menghapus 20 berkas, melebihi panduan
 memecahnya menjadi beberapa WP menghasilkan keadaan antara yang tidak bermakna
 (paket tanpa shader, atau shader tanpa pembaca) tanpa menambah nilai tinjauan.
 Seluruh perubahan bersifat penghapusan dan tidak mengubah perilaku.
+
+### Log WP-36 (Executor)
+
+Berkas dihapus (24): 6 berkas paket `gpuimage`, 16 shader `res/raw/*.glsl`,
+2 drawable `bg_filter_chip*`. Berkas diubah (1): `res/values/dimens.xml`.
+Total 25 berkas, melebihi panduan 1–5; deviasi diakui pada ringkasan WP.
+
+Checklist:
+
+- [x] T-102 Paket `gpuimage` dihapus seluruhnya (`CameraGLSurfaceView`,
+      `FilterManager`, `FilterType`, `FrameCaptureHelper`, `GLTextureRenderer`,
+      `ShaderProgram`). Tidak ada rujukan ke paket itu dari luar dirinya sendiri
+      sejak WP-13.
+- [x] T-103 Seluruh 16 shader `res/raw/*.glsl` dihapus. Satu-satunya pembacanya
+      adalah `FilterType.fragmentShaderRes` dan `FilterManager.VERTEX_SHADER_RES`
+      yang ikut terhapus. Direktori `res/raw/` hilang.
+- [x] T-104 `bg_filter_chip.xml`, `bg_filter_chip_selected.xml`,
+      `filter_menu_top_margin`, dan `filter_menu_right_margin` dihapus.
+      `dimens.xml` kini hanya memuat `sheet_peek_height`, yang masih dipakai
+      `activity_main.xml`.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -rn "FilterManager|FilterType|gpuimage|fragmentShaderRes" app/src
+  -> tanpa hasil (exit 1)
+grep -rn "bg_filter_chip|filter_menu_top_margin|filter_menu_right_margin" app/src
+  -> tanpa hasil (exit 1)
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Ukuran APK sesudah WP-36: 120.021.999 byte (sebelum: 120.066.420 byte pada
+WP-14). Selisih 44.421 byte. Angka ini **bukan** bukti pengurangan beban yang
+berarti karena APK debug memuat seluruh kelas dan sumber daya tanpa penyusutan
+agresif; pengurangan nyata diharapkan pada WP-16 saat dependensi ML Kit dan
+`camera-extensions` dilepas.
+
+Keterbatasan:
+
+- Penyebutan filter GPU di `docs/` dan `tools/` tidak disentuh WP ini. Itu
+  lingkup WP-29.
+- `StreamEncoder.kt` dan `TcpStreamServer.kt` masih ada; milik WP-31.
+- APK debug belum dipasang ulang ke perangkat setelah WP-36.
+
+### Log WP-36 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- `grep -rn "FilterManager|FilterType|gpuimage|fragmentShaderRes" app/src`
+  → tanpa hasil (exit 1).
+- `grep -rn "bg_filter_chip|filter_menu_top_margin|filter_menu_right_margin" app/src`
+  → tanpa hasil (exit 1).
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan ulang sendiri).
+- Isi diperiksa: `dimens.xml` masih valid dan hanya menyisakan
+  `sheet_peek_height`; `activity_main.xml` tidak merujuk `@dimen/filter_menu_*`;
+  `res/raw/` benar-benar hilang dari pohon, bukan hanya dari indeks git.
+
+Temuan:
+
+- QC-41: ukuran APK debug turun hanya 44.421 byte. Bukan masalah, tetapi
+  menunjukkan paket `gpuimage` bukan penyumbang ukuran utama; klaim
+  pengurangan ukuran harus menunggu WP-16 dan diukur ulang di sana.
+- QC-40 **ditutup**: T-040 pada WP-15 kini terpenuhi karena `FilterManager` dan
+  `FilterType` tidak ada lagi. WP-15 tetap `qc`; penutupan T-040 dicatat di
+  sini, bukan dengan mengubah log WP-15.
 
 ---
 
