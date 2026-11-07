@@ -47,8 +47,10 @@
             android:foregroundServiceType="camera" />
 
         <!--
-            Autostart setelah boot (CWG-12). Tidak diekspor: hanya system
-            broadcast BOOT_COMPLETED yang boleh memicu receiver ini.
+            Pengingat setelah boot (CWG-12, D-32). Tidak diekspor: hanya system
+            broadcast BOOT_COMPLETED yang boleh memicu receiver ini. Receiver
+            hanya menampilkan notifikasi; kamera tidak dinyalakan otomatis
+            karena Android 14+ melarang akses kamera dari latar belakang.
         -->
         <receiver
             android:name=".BootReceiver"

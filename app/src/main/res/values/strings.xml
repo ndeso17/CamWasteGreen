@@ -29,4 +29,10 @@
     <string name="label_interface_ready">Interface siap; berlaku saat stream dimulai</string>
     <string name="toast_interface_saved">Interface disimpan; berlaku saat stream dimulai</string>
     <string name="label_stream_url_all">Stream (semua interface): http://%1$s:%2$d/video</string>
+
+    <!-- Pengingat setelah boot (WP-19, D-32). Kamera tidak dinyalakan otomatis. -->
+    <string name="notif_channel_boot">Pengingat setelah boot</string>
+    <string name="notif_channel_boot_desc">Pemberitahuan bahwa kamera perlu dinyalakan manual setelah perangkat menyala</string>
+    <string name="notif_boot_title">Kamera belum menyala</string>
+    <string name="notif_boot_text">Android tidak mengizinkan kamera dinyalakan otomatis setelah boot. Buka CamWasteGreen dan tekan mulai stream.</string>
 </resources>
