@@ -457,16 +457,16 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-03 — Hapus endpoint `/audio` dan `/mic/toggle`
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`
 
 Dependensi: WP-01.
 
 Tugas:
-- [ ] T-006 Hapus cabang rute `/audio` dan `/mic/toggle`, fungsi
+- [x] T-006 Hapus cabang rute `/audio` dan `/mic/toggle`, fungsi
       `audioInputStream()`, serta field `mic` pada respons `/status` (CWG-14).
-- [ ] T-007 Pastikan server tidak lagi merujuk `MicManager` (CWG-14).
+- [x] T-007 Pastikan server tidak lagi merujuk `MicManager` (CWG-14).
 
 Kriteria terima:
 - `grep -n "audio\|mic" app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`
@@ -477,6 +477,49 @@ Kriteria terima:
 Risiko: klien demo lama memanggil `/audio` dan menerima 404.
 Mitigasi: tidak ada klien sah pada arsitektur D-23; dicatat di Log sebagai
 perubahan yang disengaja.
+
+### Log WP-03 (Executor)
+
+Berkas berubah (1, sesuai daftar WP):
+`app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`.
+
+Checklist:
+
+- [x] T-006 Rute `/audio` (beserta `audio/aac`) dan `/mic/toggle` dihapus dari
+      `serve()`. Fungsi `audioInputStream()` (38 baris) dihapus. Field `mic`
+      dihapus dari badan JSON `/status`. `/status` sekarang memuat
+      `streaming`, `fps`, `quality`, `clients`.
+- [x] T-007 Impor `dev.ndeso17.camwastegreen.MicManager` dihapus. Server tidak
+      lagi merujuk `MicManager`, `audioQueue`, maupun `Method.POST`.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "audio\|mic" MjpegHttpServer.kt   -> NONE
+grep -n "MicManager" MjpegHttpServer.kt    -> NONE
+grep -n "Method\." MjpegHttpServer.kt      -> no Method usage
+./gradlew assembleDebug                     -> BUILD SUCCESSFUL in 9s
+./gradlew lintDebug                         -> BUILD FAILED; 1 error
+                                               MicManager.kt:54 MissingPermission,
+                                               111 warning (tidak berubah dari
+                                               baseline; error ditutup WP-05)
+```
+
+Kriteria terima terpenuhi: grep rute/`MicManager` kosong, `assembleDebug`
+lulus. `lintDebug` belum bersih karena error berada di `MicManager.kt`, berkas
+yang dihapus pada WP-05; WP ini tidak mengklaim lint bersih.
+
+Deviasi: tidak ada. Ruang lingkup tepat satu berkas.
+
+Keterbatasan:
+
+- Penghapusan rute hanya dibuktikan pada tingkat kode dan build. Belum ada
+  permintaan HTTP nyata karena tidak ada perangkat; verifikasi `404` untuk
+  `/audio` dan `/mic/toggle` masuk MANUAL-VERIFY.
+- `MicManager`, `EqualizerView`, dan pemanggilannya di `MainActivity` masih ada
+  sampai WP-04 dan WP-05. Build tetap hijau karena kelasnya belum dihapus.
+- `/` masih memakai judul "Android IP Cam" dari upstream; penggantian halaman
+  diagnostik berada pada WP-12.
 
 ---
 
@@ -1243,11 +1286,11 @@ dengan baseline lint tanpa alasan tertulis.
 
 ---
 
-## WP-29 — Sinkronkan `AGENTS.md` dan dokumen `.work/`
+## WP-29 — Sinkronkan `AGENTS.md`, `README.md`, dan dokumen `.work/`
 
 Status: todo
 
-File: `AGENTS.md`, `.work/Structure.md`, `.work/Architecture.md`
+File: `AGENTS.md`, `README.md`, `.work/Structure.md`, `.work/Architecture.md`
 
 Dependensi: WP-28.
 
@@ -1262,6 +1305,12 @@ Tugas:
 - [ ] T-079 Perbarui `.work/Architecture.md`: alur frame memakai
       `FrameEncoder` → `FrameSource` → `MultipartWriter`, tanpa preview pada
       v1, dan status otorisasi token (CWG-01, CWG-11, CWG-15).
+- [ ] T-085 Perbarui `README.md`: hapus baris "Keadaan saat ini" yang sudah
+      tertutup (ML Kit, filter dan enkode ganda, audio, kamera terikat
+      Activity, status belum terukur, stream tanpa otorisasi, jalur H.264),
+      ubah kalimat "Peran yang dituju" menjadi pernyataan keadaan, dan
+      hilangkan duplikasi dengan bagian "Status pengembangan" (CWG-N06;
+      temuan QC-11 dan QC-12 WP-02).
 
 Kriteria terima:
 - `grep -rn "MicManager\|FilterPipeline\|FrameBuffer\|previewView" AGENTS.md .work/Structure.md .work/Architecture.md`
@@ -1269,6 +1318,9 @@ Kriteria terima:
 - `grep -n "B-21\|B-28\|B-29" AGENTS.md` hanya menemukan rujukan yang
   menyatakan blocker tersebut selesai dengan D-27..D-29, bukan sebagai
   keputusan terbuka.
+- `grep -n "Keadaan saat ini" README.md` kosong, dan tidak ada baris tabel yang
+  menyebut `MicManager`, `FilterPipeline`, `StreamEncoder`, `TcpStreamServer`,
+  `bindToLifecycle`, atau `RECORD_AUDIO` sebagai masih berjalan.
 - Setiap komponen pada `.work/Structure.md` bagian 3 memiliki berkas nyata:
   daftar path diperiksa dengan `ls`.
 - Bukti: keluaran grep dan `ls` pada Log WP.

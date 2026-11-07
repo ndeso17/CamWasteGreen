@@ -1,7 +1,6 @@
 package dev.ndeso17.camwastegreen
 
 import android.content.Context
-import dev.ndeso17.camwastegreen.MicManager
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Response
@@ -52,35 +51,14 @@ class MjpegHttpServer(
                 )
             }
 
-            "/audio" -> {
-                newChunkedResponse(
-                    Response.Status.OK,
-                    "audio/aac",
-                    audioInputStream()
-                )
-            }
-
             "/status" -> {
                 val json = JSONObject().apply {
                     put("streaming", FrameBuffer.latestFrame != null)
-                    put("mic", MicManager.isActive)
                     put("fps", currentFps)
                     put("quality", currentQuality)
                     put("clients", synchronized(activeStreams) { activeStreams.size })
                 }
                 newFixedLengthResponse(Response.Status.OK, "application/json", json.toString())
-            }
-
-            "/mic/toggle" -> {
-                if (session?.method != Method.POST) {
-                    newFixedLengthResponse(Response.Status.METHOD_NOT_ALLOWED, "text/plain", "POST required")
-                } else {
-                    MicManager.toggle()
-                    val json = JSONObject().apply {
-                        put("mic", MicManager.isActive)
-                    }
-                    newFixedLengthResponse(Response.Status.OK, "application/json", json.toString())
-                }
             }
 
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found")
@@ -110,33 +88,6 @@ class MjpegHttpServer(
                 }
             } catch (_: Exception) {
                 // Client disconnect or stream closed
-            } finally {
-                synchronized(activeStreams) { activeStreams.remove(pipeOut) }
-                try { pipeOut.close() } catch (_: Exception) {}
-            }
-        }
-
-        return pipeIn
-    }
-
-    private fun audioInputStream(): InputStream {
-        val pipeIn = java.io.PipedInputStream(65536)
-        val pipeOut = java.io.PipedOutputStream(pipeIn)
-
-        synchronized(activeStreams) { activeStreams.add(pipeOut) }
-
-        executor.execute {
-            try {
-                while (!Thread.currentThread().isInterrupted) {
-                    val packet = MicManager.audioQueue.poll()
-                    if (packet != null) {
-                        pipeOut.write(packet)
-                        pipeOut.flush()
-                    } else {
-                        Thread.sleep(20)
-                    }
-                }
-            } catch (_: Exception) {
             } finally {
                 synchronized(activeStreams) { activeStreams.remove(pipeOut) }
                 try { pipeOut.close() } catch (_: Exception) {}
