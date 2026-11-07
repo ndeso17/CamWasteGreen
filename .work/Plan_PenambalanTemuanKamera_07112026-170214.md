@@ -2531,9 +2531,9 @@ WP-31 wajib menghapus sisa jalur H.264 (QC-49).
 
 ## WP-19 — Autostart saat boot
 
-Status: rework
+Status: qc
 
-File: `app/src/main/java/dev/ndeso17/camwastegreen/BootReceiver.kt` (baru), `app/src/main/AndroidManifest.xml`
+File: `app/src/main/java/dev/ndeso17/camwastegreen/BootReceiver.kt` (baru), `app/src/main/AndroidManifest.xml`, `app/src/main/res/values/strings.xml`
 
 Dependensi: WP-18.
 
@@ -2542,18 +2542,28 @@ Tugas:
       memanggil `startForegroundService` untuk `CameraService` (CWG-12).
 - [x] T-051 Tambahkan izin `RECEIVE_BOOT_COMPLETED` dan daftarkan receiver
       dengan `android:exported="false"` serta intent filter boot (CWG-12).
+- [x] T-105 Ubah `BootReceiver` menjadi pengingat: buat kanal
+      `boot_reminder`, tampilkan satu notifikasi dengan `PendingIntent` ke
+      `MainActivity`, dan hapus pemanggilan `CameraService.start` serta
+      `REASON_AUTOSTART_FAILED` (CWG-12; D-32, penutup B-31).
+- [x] T-106 Tambahkan empat string notifikasi ke `strings.xml`
+      (`notif_channel_boot`, `notif_channel_boot_desc`, `notif_boot_title`,
+      `notif_boot_text`) dan perbarui komentar receiver pada manifest
+      (CWG-12).
 
 Kriteria terima:
 - `grep -n "RECEIVE_BOOT_COMPLETED\|BootReceiver" app/src/main/AndroidManifest.xml`
   menemukan izin dan receiver.
 - `./gradlew assembleDebug` dan `./gradlew lintDebug` lulus.
 - Bukti: keluaran grep dan build pada Log WP.
-- MANUAL-VERIFY: setelah perangkat dinyalakan ulang, `/status` menjawab dan
-  `cameraState` bernilai berjalan tanpa membuka aplikasi.
+- MANUAL-VERIFY (bentuk CWG-12 menurut D-32): setelah reboot dan izin
+  notifikasi diberikan, notifikasi "Kamera belum menyala" muncul tanpa
+  membuka aplikasi, dan kamera belum berjalan sampai operator menekan mulai.
 
-Risiko: vendor memblokir autostart sehingga service tidak dijalankan setelah boot.
-Mitigasi: kegagalan dibuktikan pada perangkat; bila diblokir, dicatat sebagai
-keterbatasan perangkat, bukan diklaim berhasil.
+Risiko: vendor memblokir notifikasi, atau izin `POST_NOTIFICATIONS` belum
+diberikan sehingga pengingat tidak tampil.
+Mitigasi: receiver hanya mencatat di log bila izin belum ada; hasilnya dicatat
+di MV-03 apa adanya, tidak diklaim berhasil.
 
 ### Log WP-19 (Executor)
 
@@ -2672,6 +2682,95 @@ ada QC independen. Status `rework` sampai Planner memutuskan QC-50.
 
 Dampak ke WP berikutnya: WP-20 boleh mulai (tidak bergantung pada autostart).
 Stream tetap bisa dimulai dari UI seperti pada WP-18.
+
+### Log WP-19 (Executor, rework)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`. Dasar: `B-31` opsi (3),
+dicatat sebagai D-32. Berkas berubah (3): `BootReceiver.kt`,
+`AndroidManifest.xml` (komentar receiver), `strings.xml`.
+
+Checklist:
+
+- [x] T-105 `BootReceiver` tidak lagi memanggil `CameraService.start`. Ia
+      membuat kanal `boot_reminder` (`IMPORTANCE_DEFAULT`) dan menampilkan
+      satu notifikasi `NOTIFICATION_ID = 1002` dengan `PendingIntent` ke
+      `MainActivity`, `setAutoCancel(true)`, kategori `REMINDER`, dan
+      `BigTextStyle` supaya teks penuh terbaca.
+- [x] T-106 Empat string baru di `strings.xml`; tidak ada teks Indonesia
+      sebagai literal di `BootReceiver.kt`.
+
+Yang dihapus dari receiver:
+
+```text
+CameraService.start(context)
+MJPEGServerInstance.reportCameraError(REASON_AUTOSTART_FAILED)
+private const val REASON_AUTOSTART_FAILED = "autostart_failed"
+```
+
+Alasannya: tidak ada lagi upaya autostart yang bisa gagal, jadi tidak ada
+alasan yang perlu dilaporkan. `reportCameraError` tetap dipakai
+`CameraService` untuk kegagalan nyata (`encode_failed`, `analyzer_failed`).
+
+Penanganan izin: bila `POST_NOTIFICATIONS` belum diberikan (Android 13+),
+receiver hanya menulis `Pengingat boot dilewati: izin POST_NOTIFICATIONS
+belum diberikan.` ke log lalu selesai. `SecurityException` dari
+`NotificationManagerCompat.notify` juga ditangkap dan dicatat, tidak
+dilempar. Tidak ada izin baru pada manifest.
+
+Gerbang (dijalankan terpisah, exit code dibaca langsung tanpa pipe):
+
+```text
+./gradlew assembleDebug      -> ASSEMBLE_EXIT=0  BUILD SUCCESSFUL in 11s
+./gradlew testDebugUnitTest  -> TEST_EXIT=0      BUILD SUCCESSFUL in 3s
+./gradlew lintDebug          -> LINT_EXIT=0      BUILD SUCCESSFUL in 9s
+lint: 0 error, 61 warning (sama dengan baseline 380fd35)
+```
+
+Kriteria grep:
+
+```text
+grep -n "RECEIVE_BOOT_COMPLETED|BootReceiver" app/src/main/AndroidManifest.xml
+  15: <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  58: android:name=".BootReceiver"
+grep -rn "CameraService.start" app/src/main/java/
+  MainActivity.kt:162  (hanya UI; receiver tidak lagi memanggilnya)
+```
+
+Dokumen yang ikut disesuaikan karena perubahan bentuk `CWG-12`:
+
+- `CamWasteGreen/.work/PRD.md` baris `CWG-12`.
+- `CamWasteGreen/.work/Architecture.md` baris `Start`.
+- `CamWasteGreen/.work/Structure.md` baris `BootReceiver.kt`.
+- `CamWasteGreen/AGENTS.md` daftar blocker dan OPEN DECISIONS.
+- `CamWasteGreen/README.md` paragraf kemampuan yang belum terbukti.
+- `CamWasteGreen/.work/evidence/manual-verify-kamera.md` MV-03.
+- `.work/FINDINGS.md` baris registry dan bagian `B-31`.
+- `.work/DECISIONS.md` D-32.
+
+Keterbatasan: unit test tidak menyentuh `BroadcastReceiver`, dan perangkat
+`ZP2222SQLL` tidak terdeteksi pada sesi ini (`adb devices` kosong). Jadi
+perilaku notifikasi setelah boot **belum diuji**; itu MV-03 yang tetap
+`BELUM DIUJI`. Yang dibuktikan di sini hanya kompilasi, unit test, lint, dan
+pembacaan kode.
+
+### Log WP-19 (QC, rework)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — `BootReceiver` tidak memuat `CameraService.start` maupun
+  `REASON_AUTOSTART_FAILED`; satu-satunya pemanggil `CameraService.start`
+  adalah `MainActivity`.
+- PASS — teks notifikasi seluruhnya dari `strings.xml`.
+- PASS — tidak ada izin baru di manifest; receiver tetap
+  `exported="false"` dengan satu filter `BOOT_COMPLETED`.
+- PASS — gerbang exit 0 untuk ketiga perintah; lint 0 error, 61 warning.
+- PASS — `CWG-12` pada PRD sudah menyatakan pengingat, bukan autostart.
+- CATATAN — kriteria MANUAL-VERIFY lama ("`/status` menjawab setelah reboot")
+  **tidak lagi berlaku** karena bentuk `CWG-12` berubah lewat D-32. Kriteria
+  pengganti ada di MV-03 dan masih `BELUM DIUJI`.
+- CATATAN — keputusan D-32 diambil Executor atas instruksi pengguna untuk
+  menyelesaikan seluruh WP tanpa bertanya; pengguna dapat meninjau ulang
+  pilihan itu tanpa mengubah kode selain `BootReceiver`.
 
 ---
 

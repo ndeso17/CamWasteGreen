@@ -93,7 +93,7 @@ Aturan:
 | Tipe | Foreground service, tipe `camera` |
 | Notifikasi | Nama perangkat dan jumlah klien aktif |
 | Kamera | Di-bind ke `CameraService`, bukan ke Activity |
-| Start | Saat operator membuka aplikasi. Autostart saat boot ditulis sebagai tujuan, tetapi **belum dapat dipenuhi** pada Android 14+ untuk foreground service tipe `camera` (B-31); keputusan ada di FINDINGS | Hanya lewat perintah eksplisit; tidak berhenti saat Activity selesai |
+| Start | Saat operator membuka aplikasi dan menekan mulai. Setelah boot, `BootReceiver` hanya menampilkan notifikasi pengingat: Android 14+ melarang foreground service tipe `camera` memperoleh akses kamera dari latar belakang (B-31, D-32) | Hanya lewat perintah eksplisit; tidak berhenti saat Activity selesai |
 | Stop | Hanya lewat perintah eksplisit; tidak berhenti saat Activity selesai |
 | Izin | `CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CAMERA`, `WAKE_LOCK`, `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` |
 

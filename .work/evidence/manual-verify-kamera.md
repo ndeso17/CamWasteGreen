@@ -47,18 +47,25 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 - Tanggal: ____
 - Catatan: ____
 
-### MV-03 — Autostart setelah boot
+### MV-03 — Pengingat setelah boot
 
 - Status: `BELUM DIUJI`
-- Kebutuhan: CWG-12
+- Kebutuhan: CWG-12 (bentuk baru menurut D-32)
 - Perangkat: ____
-- Prosedur: reboot perangkat, tunggu 90 detik tanpa membuka aplikasi, lalu
-  akses `/status` dari mesin lain.
-- Bukti: logcat yang memuat `BootReceiver` dan baris start service, keluaran
-  `/status`.
-- Catatan wajib: **B-31 terbuka.** Android 14+ melarang foreground service
-  bertipe kamera dimulai dari latar belakang (`am_foreground_service_denied`).
-  Butir ini tidak dapat dinyatakan sesuai sampai B-31 diputuskan.
+- Prosedur: berikan izin notifikasi, reboot perangkat, tunggu 90 detik tanpa
+  membuka aplikasi, lalu periksa baki notifikasi untuk
+  "Kamera belum menyala" dari CamWasteGreen. Setelah itu akses `/status` dari
+  mesin lain **sebelum** menekan mulai.
+- Bukti: tangkapan layar notifikasi, logcat yang memuat
+  `IPCam.BootReceiver`, dan keluaran `/status` yang menunjukkan kamera belum
+  berjalan (atau tidak ada proses aplikasi).
+- Catatan wajib: **`CWG-12` sudah berubah bentuk (D-32, penutup B-31).** Yang
+  diuji bukan lagi autostart, melainkan munculnya notifikasi pengingat setelah
+  boot. Android 14+ menolak akses kamera untuk foreground service tipe
+  `camera` yang dimulai dari latar belakang
+  (`am_foreground_service_denied`), jadi tidak ada lagi klaim autostart.
+  Butir ini hanya dapat dinyatakan sesuai bila notifikasi benar-benar muncul
+  dan kamera tetap belum berjalan sampai operator menekan mulai.
 - Tanggal: ____
 - Catatan: ____
 

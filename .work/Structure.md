@@ -62,7 +62,7 @@ CamWasteGreen/
 | `MainActivity.kt` | UI operator: izin, start/stop, pilihan interface jaringan, tampilan alamat |
 | `CameraService.kt` | Foreground service tipe `camera`; mengikat CameraX, menjalankan analyzer, memicu kunci tuning, notifikasi status |
 | `MJPEGServerInstance.kt` | Singleton server, kandidat alamat dari `NetworkInterface`, penyedia token, penerusan frame ke `FrameSource` |
-| `BootReceiver.kt` | Menerima `BOOT_COMPLETED` dan meminta service start; hasilnya bergantung B-31 |
+| `BootReceiver.kt` | Menerima `BOOT_COMPLETED` dan menampilkan notifikasi pengingat; tidak memulai kamera (D-32) |
 | `camera/CameraTuning.kt` | Memasang `CONTROL_AE_LOCK`, `CONTROL_AWB_LOCK`, `CONTROL_AF_MODE_OFF` lewat Camera2Interop |
 | `stream/MjpegHttpServer.kt` | NanoHTTPD: `/` (halaman diagnosa), `/video`, `/status`; otorisasi, dedupe, balasan galat |
 | `stream/ApiAuth.kt` | Verifikasi `X-Api-Key` waktu-tetap dan daftar alamat yang diizinkan |

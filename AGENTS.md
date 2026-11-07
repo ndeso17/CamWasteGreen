@@ -33,9 +33,10 @@ Blocker yang sudah selesai: `B-21` kontrak stream ditutup D-27 dan D-29
 (`/video` + `/status`, 1280x720, 20 FPS, q80, maks 2 klien); `B-28` model
 otorisasi sisi kamera ditutup D-27 (token statis `X-Api-Key`); `B-29` lisensi
 ditutup D-28 (MIT, atribusi di `README.md`); `B-30` jalur H.264 ditutup D-30
-(kedua berkasnya dihapus). Yang masih terbuka: `B-03` geometri pemasangan,
-`B-06` ambang FPS/latensi, `B-24` korespondensi encoder–observasi, dan `B-31`
-autostart kamera pada Android 14+.
+(kedua berkasnya dihapus); `B-31` autostart kamera ditutup D-32 (`CWG-12`
+diturunkan menjadi pengingat setelah boot, bukan autostart). Yang masih
+terbuka: `B-03` geometri pemasangan, `B-06` ambang FPS/latensi, dan `B-24`
+korespondensi encoder–observasi.
 
 ## STACK
 
@@ -55,7 +56,7 @@ CamWasteGreen/
 │   ├── MainActivity.kt              # UI operator; pilihan interface, start/stop
 │   ├── CameraService.kt             # foreground service; kamera + analyzer
 │   ├── MJPEGServerInstance.kt       # singleton server, kandidat alamat, status
-│   ├── BootReceiver.kt              # menerima BOOT_COMPLETED (lihat B-31)
+│   ├── BootReceiver.kt              # BOOT_COMPLETED: notifikasi pengingat, bukan autostart
 │   ├── camera/CameraTuning.kt       # kunci AE/AWB/AF setelah warmup
 │   └── stream/
 │       ├── MjpegHttpServer.kt       # NanoHTTPD: /, /video, /status
@@ -129,6 +130,8 @@ itu hilang bersama jalur audio.
 ## OPEN DECISIONS
 
 `B-03` geometri pemasangan kamera, `B-06` ambang FPS/latensi/usia frame,
-`B-24` korespondensi penandaan waktu dengan observasi, `B-31` autostart kamera
-setelah boot pada Android 14+ (foreground service tipe `camera` tidak boleh
-dimulai dari latar belakang). Namespace alias `CWG-` disahkan pada D-31.
+`B-24` korespondensi penandaan waktu dengan observasi. `B-31` sudah ditutup
+D-32: kamera tidak dinyalakan otomatis setelah boot, karena Android 14+
+melarang foreground service tipe `camera` memperoleh akses kamera dari latar
+belakang. `BootReceiver` hanya menampilkan notifikasi pengingat. Namespace
+alias `CWG-` disahkan pada D-31.

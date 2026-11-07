@@ -84,7 +84,7 @@ baru; perubahan bentuk wajib dicatat di `.work/DECISIONS.md` root.
 | ID | Kebutuhan | Kriteria terima |
 |---|---|---|
 | CWG-11 | Kamera berjalan di foreground service bertipe `camera` | Layar mati dan app di background membuat stream tetap hidup |
-| CWG-12 | Service dimulai otomatis saat perangkat dinyalakan | Setelah boot, service aktif tanpa sentuhan operator |
+| CWG-12 | Aplikasi mengingatkan operator setelah perangkat dinyalakan bahwa kamera perlu dinyalakan manual (D-32; autostart tidak mungkin pada Android 14+, lihat B-31) | Setelah boot, notifikasi pengingat muncul bila izin `POST_NOTIFICATIONS` diberikan. **Tidak** disyaratkan service aktif tanpa sentuhan operator |
 | CWG-13 | Kegagalan kamera dilaporkan sebagai status, bukan exception yang menelan proses | `/status` menunjukkan `cameraState` dan alasan kegagalan |
 | CWG-14 | Aplikasi tidak meminta izin mikrofon | `RECORD_AUDIO` tidak ada di manifest |
 | CWG-15 | Server hanya menerima koneksi sesuai keputusan akses jaringan | Permintaan dari sumber yang tidak diizinkan ditolak |

@@ -17,9 +17,13 @@ stream H.264 sudah dihapus dari kode, bukan hanya dinonaktifkan. Yang tersisa
 pada jalur sensor: kamera, satu enkode JPEG, dan server MJPEG.
 
 Kemampuan yang **belum** terbukti: seluruh butir perangkat pada
-`.work/evidence/manual-verify-kamera.md` masih `BELUM DIUJI`. Autostart kamera
-setelah boot terhalang `B-31` (Android 14+ melarang foreground service tipe
-`camera` dimulai dari latar belakang).
+`.work/evidence/manual-verify-kamera.md` masih `BELUM DIUJI`.
+
+Kamera **tidak** menyala sendiri setelah perangkat dinyalakan ulang. Android
+14 ke atas melarang foreground service tipe `camera` memperoleh akses kamera
+bila dimulai dari latar belakang, sehingga aplikasi hanya menampilkan
+notifikasi pengingat; operator tetap harus membuka aplikasi dan menekan mulai
+(`B-31`, ditutup `D-32`).
 
 ## Keadaan pekerjaan
 
