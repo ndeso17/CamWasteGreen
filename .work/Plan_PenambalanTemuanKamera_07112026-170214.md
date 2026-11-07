@@ -2531,16 +2531,16 @@ WP-31 wajib menghapus sisa jalur H.264 (QC-49).
 
 ## WP-19 — Autostart saat boot
 
-Status: todo
+Status: rework
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/BootReceiver.kt` (baru), `app/src/main/AndroidManifest.xml`
 
 Dependensi: WP-18.
 
 Tugas:
-- [ ] T-050 Buat `BootReceiver` yang menerima `ACTION_BOOT_COMPLETED` dan
+- [x] T-050 Buat `BootReceiver` yang menerima `ACTION_BOOT_COMPLETED` dan
       memanggil `startForegroundService` untuk `CameraService` (CWG-12).
-- [ ] T-051 Tambahkan izin `RECEIVE_BOOT_COMPLETED` dan daftarkan receiver
+- [x] T-051 Tambahkan izin `RECEIVE_BOOT_COMPLETED` dan daftarkan receiver
       dengan `android:exported="false"` serta intent filter boot (CWG-12).
 
 Kriteria terima:
@@ -2554,6 +2554,124 @@ Kriteria terima:
 Risiko: vendor memblokir autostart sehingga service tidak dijalankan setelah boot.
 Mitigasi: kegagalan dibuktikan pada perangkat; bila diblokir, dicatat sebagai
 keterbatasan perangkat, bukan diklaim berhasil.
+
+### Log WP-19 (Executor)
+
+Berkas berubah (2): `BootReceiver.kt` (baru) dan `AndroidManifest.xml`
+(izin `RECEIVE_BOOT_COMPLETED` + deklarasi receiver).
+
+Checklist:
+
+- [x] T-050 `BootReceiver` menerima `ACTION_BOOT_COMPLETED` lalu memanggil
+      `CameraService.start(context)`. Aksi diperiksa ulang di dalam
+      `onReceive` supaya intent lain tidak menyalakan kamera. Kegagalan
+      ditangkap sebagai `Exception` dan dilaporkan lewat
+      `MJPEGServerInstance.reportCameraError("autostart_failed")`.
+- [x] T-051 Izin `RECEIVE_BOOT_COMPLETED` ditambahkan dan receiver didaftarkan
+      dengan `android:exported="false"` serta intent filter
+      `android.intent.action.BOOT_COMPLETED`.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+grep -n "RECEIVE_BOOT_COMPLETED|BootReceiver" app/src/main/AndroidManifest.xml
+  15:    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  55:            android:name=".BootReceiver"
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning (sama dengan sebelum WP-19)
+
+Resolver paket di perangkat setelah install:
+  cmd package query-receivers --brief -a android.intent.action.BOOT_COMPLETED
+  -> dev.ndeso17.camwastegreen/.BootReceiver
+  dumpsys package -> "f6f3312 dev.ndeso17.camwastegreen/.BootReceiver filter 5d46ae3"
+```
+
+Bukti perangkat (moto g57 power, `ZP2222SQLL`, Android 16, APK dipasang
+sebelum reboot sehingga manifest baru ikut terbaca):
+
+```text
+11-08 04:32:19.381 I ActivityManager: Start proc 29696:dev.ndeso17.camwastegreen/u0a458
+  for broadcast {dev.ndeso17.camwastegreen/.BootReceiver}
+11-08 04:32:23.433 I ActivityManager: Background started FGS: Allowed
+  [callingPackage: dev.ndeso17.camwastegreen; ... code:BOOT_COMPLETED; ...]
+11-08 04:32:23.452 W ActivityManager: Foreground service started from background
+  can not have location/camera/microphone access: service dev.ndeso17.camwastegreen/.CameraService
+11-08 04:32:23.453 I am_foreground_service_denied:
+  [0,dev.ndeso17.camwastegreen/.CameraService,0,BOOT_COMPLETED,34,34,...]
+11-08 04:32:43.578 D ActivityManager: freezing 29696 dev.ndeso17.camwastegreen,
+  reason = moto_freezer, adj=920, adjType=cch-empty
+11-08 04:33:14.622 I ActivityManager: Killing 29696:dev.ndeso17.camwastegreen/u0a458
+  (adj 920, setSvc -10000): empty #31
+```
+
+Setelah boot selesai: `pidof dev.ndeso17.camwastegreen` kosong, `dumpsys
+activity services` kosong, dan `curl http://127.0.0.1:18085/status` tidak
+mendapat jawaban.
+
+**MANUAL-VERIFY WP-19 GAGAL.** Receiver berjalan, tetapi platform menolak
+akses kameranya. `startForeground` sendiri tidak melempar exception, jadi
+`T-045` tidak menangkap apa pun; sistem hanya mencabut akses kamera lalu
+membekukan dan mematikan proses.
+
+Sebab (dari dokumentasi resmi, bukan dugaan): pada Android 14+ aplikasi
+dengan `targetSdk >= 34` tidak boleh membuat foreground service bertipe
+`camera` saat berada di latar belakang. `ACTION_BOOT_COMPLETED` ada dalam
+daftar pengecualian *untuk memulai service*, tetapi **tidak** ada dalam
+daftar pengecualian akses izin while-in-use (kamera/mikrofon/lokasi). Daftar
+pengecualian akses kamera hanya berisi: service dimulai komponen sistem,
+interaksi widget, interaksi notifikasi, `PendingIntent` dari aplikasi lain
+yang terlihat, device policy controller, `VoiceInteractionService`, dan
+aplikasi dengan izin `START_ACTIVITIES_FROM_BACKGROUND`. Aplikasi ini
+targetSdk 34, jadi batasan itu berlaku.
+
+Opsi mitigasi yang **tidak** dipilih sekarang, beserta alasannya:
+
+- Meminta izin `SYSTEM_ALERT_WINDOW` (aplikasi targetSdk 34 cukup memegang
+  izin itu untuk menjadi pengecualian). Tidak dipilih: itu izin "tampil di
+  atas aplikasi lain" yang harus diaktifkan pengguna lewat pengaturan khusus,
+  dan memakainya hanya untuk memaksa autostart kamera adalah penyalahgunaan
+  yang juga dibatasi kebijakan Play. Tidak boleh dipilih diam-diam oleh
+  Executor.
+- Menaikkan service menjadi tipe lain (mis. `dataSync`) lalu mengharapkan
+  kamera tetap bisa dibuka. Tidak masuk akal: tanpa tipe `camera` akses
+  kamera tetap ditolak.
+- Menurunkan `targetSdk` di bawah 34. Tidak dipilih: mengundurkan diri dari
+  batasan platform sambil tetap memasang aplikasi di Android 16, dan
+  bertentangan dengan `CWG-11`.
+
+Status WP-19 dicatat `rework`, bukan `qc`, karena satu kriteria terima
+(MANUAL-VERIFY setelah reboot) **tidak** terpenuhi. Kode dan gerbang sudah
+lulus; yang gagal adalah perilaku yang diminta, dan penyebabnya di luar
+jangkauan kode.
+
+Temuan:
+
+- QC-50: autostart kamera setelah boot tidak mungkin pada Android 14+
+  (targetSdk 34) tanpa pengecualian izin. `CWG-12` perlu diputuskan ulang
+  Planner: (a) menerima bahwa stream baru hidup setelah aplikasi dibuka,
+  (b) menerima `SYSTEM_ALERT_WINDOW` sebagai syarat yang dipilih pengguna,
+  atau (c) menurunkan lingkup `CWG-12` menjadi "aplikasi mengingatkan setelah
+  boot" alih-alih "kamera hidup sendiri". Dicatat juga sebagai `B-31` pada
+  `.work/FINDINGS.md`.
+- QC-51: `BootReceiver` tetap dipertahankan meski autostart gagal, karena ia
+  tidak berbahaya dan sudah benar mendaftarkan diri. Bila Planner memilih
+  opsi (c), receiver ini yang akan dipakai untuk menampilkan pengingat.
+
+### Log WP-19 (QC)
+
+Verdict: **FAIL pada MANUAL-VERIFY**; diperiksa sendiri oleh Executor, belum
+ada QC independen. Status `rework` sampai Planner memutuskan QC-50.
+
+- Kriteria grep terpenuhi.
+- Gerbang lulus, exit `0`, lint 0 error.
+- Manifest diperiksa: receiver `exported="false"`, hanya filter
+  `BOOT_COMPLETED`, dan resolver perangkat memang memuatnya.
+- MANUAL-VERIFY diuji dua kali pada perangkat yang sama; kegagalan konsisten
+  dan penyebabnya tercatat pada log sistem (`am_foreground_service_denied`).
+
+Dampak ke WP berikutnya: WP-20 boleh mulai (tidak bergantung pada autostart).
+Stream tetap bisa dimulai dari UI seperti pada WP-18.
 
 ---
 
