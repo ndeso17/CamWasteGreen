@@ -908,7 +908,7 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-06 — Transformasi NV21 murni untuk rotasi frame
 
-Status: qc
+Status: done
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/Nv21Transform.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/Nv21TransformTest.kt` (baru)
 
@@ -1017,6 +1017,49 @@ Keterbatasan:
   dibuktikan tanpa perangkat; `MANUAL-VERIFY`.
 - Belum ada pengukuran FPS, latensi, atau bandwidth; WP ini tidak menambah
   angka baru.
+
+### Log WP-06 (QC)
+
+Verdict: **PASS**. Laporan: `.work/evidence/QC-WP-06.md`. Commit diperiksa:
+`9f665a5`.
+
+QC menjalankan `./gradlew clean` lebih dulu, lalu test targeted:
+
+```text
+./gradlew clean
+./gradlew testDebugUnitTest --tests "dev.ndeso17.camwastegreen.stream.Nv21TransformTest"
+  -> BUILD SUCCESSFUL in 31s, 27 task executed
+     Nv21TransformTest: 10 test, 0 failure, 0 error
+./gradlew testDebugUnitTest assembleDebug -> BUILD SUCCESSFUL in 26s
+./gradlew lintDebug -> BUILD SUCCESSFUL; 0 error, 108 warning
+diff daftar warning WP-05 vs WP-06 -> IDENTICAL
+```
+
+Verifikasi independen. Test dan implementasi ditulis pihak yang sama, jadi
+lulusnya test hanya membuktikan keduanya sepakat. QC menulis oracle Python
+mandiri (`/tmp/opencode/qc-oracle-nv21.py`) yang membangun bidang luma dan
+kisi chroma sendiri serta merotasi bidang 2D dengan operasi matriks biasa,
+lalu membandingkan byte per byte dengan dump keluaran Kotlin. Hasil:
+20 kombinasi (3x2, 5x3, 4x4, 7x5, 2x2 x sudut 0/90/180/270) **0 mismatch**.
+Berkas test sementara `QcOracleDumpTest` dihapus dan tidak masuk commit.
+
+Mutasi kedua oleh QC, pada lapis chroma (`90 -> Pair(ch - 1 - cy, cx)`
+diubah `Pair(cy, cx)`): 2 test FAILED, `BUILD FAILED`. Jadi test menangkap
+kesalahan pada luma maupun chroma. Mutasi dipulihkan dari cadangan dan suite
+kembali hijau.
+
+Anti-ghost: tanpa mutasi 10 test lulus; dengan mutasi 2 gagal. `grep -rn
+"Nv21Transform" app/src/main` hanya menemukan berkas kelas itu sendiri.
+
+Temuan note (tidak menahan WP-07):
+
+- QC-26: `Nv21Transform` belum dipakai jalur sensor mana pun; penyambungan
+  ke `FilterPipeline` ada pada WP-14 dan ke foreground service pada
+  WP-17/WP-18. WP ini belum mengubah perilaku aplikasi.
+- QC-27: kebenaran visual rotasi pada dimensi ganjil hanya bisa dinilai dari
+  frame nyata; `MANUAL-VERIFY`.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 
