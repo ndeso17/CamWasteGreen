@@ -33,7 +33,7 @@ PC      │  Backend Orchestrator        │
 | Komponen | Tanggung jawab | Tidak boleh |
 |---|---|---|
 | `CameraService` | Foreground service; mengikat CameraX ke lifecycle service; mengelola start dan stop | Menjalankan inferensi |
-| `CameraController` | Membuka kamera, mengatur resolusi, FPS, orientasi, dan kunci eksposur | Menentukan target |
+| `CameraTuning` | Memasang kunci AE/AWB/AF setelah warmup dan melaporkan hasilnya | Mengklaim kunci berhasil tanpa laporan perangkat |
 | `FrameSource` | Menyimpan frame terakhir beserta nomor urut, waktu pengambilan, dan dimensi | Menyimpan lebih dari satu frame |
 | `FrameEncoder` | Mengubah frame YUV menjadi JPEG satu kali | Melakukan enkode ganda atau filter wajah |
 | `MjpegHttpServer` | Menyajikan `/video` dan `/status`; membatasi klien; memberi batas waktu tulis | Menerima perintah robot atau audio |
@@ -47,8 +47,9 @@ PC      │  Backend Orchestrator        │
 | Nomor urut frame | `FrameSource` | Harus monoton dan tidak dibuat ulang per koneksi |
 | Waktu pengambilan | `FrameSource` | Sumber tunggal untuk header waktu |
 | FPS terukur | `StatusRegistry` | Dihitung dari jumlah frame dalam jendela waktu nyata |
-| State kamera | `StatusRegistry` | Ditulis `CameraController`, dibaca server |
-| Konfigurasi kamera | `CameraController` | Resolusi, FPS, orientasi, eksposur |
+| State kamera | `StatusRegistry` | Ditulis `CameraService`, dibaca server |
+| Status kunci tuning | `StatusRegistry` | Ditulis `CameraService` lewat callback `CameraTuning`, dibaca server |
+| Konfigurasi kamera | `CameraConfig` | Resolusi, FPS, kualitas, port, rotasi pemasangan |
 
 Tidak ada dua komponen menulis state yang sama. `MjpegHttpServer` tidak
 menyimpan frame; server hanya membaca `FrameSource`.
@@ -56,14 +57,23 @@ menyimpan frame; server hanya membaca `FrameSource`.
 ## 4. Alur frame
 
 ```
-CameraX ImageAnalysis (STRATEGY_KEEP_ONLY_LATEST)
-  ke rotasi sesuai orientasi tetap
-  ke eksposur terkunci
-  ke FrameSource.publish(frame, capturedAtMs)  -> seq bertambah
-  ke FrameEncoder (YUV ke JPEG, satu kali)
-  ke FrameSource.latest (jpeg, seq, capturedAtMs)
+CameraX ImageAnalysis (STRATEGY_KEEP_ONLY_LATEST, ResolutionSelector 16:9)
+  ke FrameEncoder.encode(imageProxy, quality, mountRotationDegrees)
+       - Nv21Transform merotasi NV21 sesuai pemasangan
+       - satu kali compress ke JPEG
+  ke FrameSource.publish(jpeg, width, height, capturedAtMs) -> seq bertambah
+  ke StatusRegistry.onFrame(packet)  -> measuredFps dihitung dari jendela waktu
+  ke StreamSession (dedupe seq, batas klien, batas waktu tulis)
   ke MjpegHttpServer menulis part multipart dengan header
 ```
+
+Kunci AE/AWB/AF tidak berada di jalur per frame. Setelah `WARMUP_FRAMES` frame
+terbit, `CameraService` memanggil `CameraTuning.lock` satu kali per ikatan
+kamera; hasilnya dilaporkan ke `StatusRegistry.tuningState`. Nilai itu tidak
+mengubah `cameraState`, sehingga perangkat yang tidak mendukung kunci tetap
+melaporkan stream sehat.
+
+Tidak ada preview pada v1. Satu-satunya keluaran gambar adalah MJPEG `/video`.
 
 Aturan:
 
@@ -74,7 +84,7 @@ Aturan:
 3. Server tidak boleh mengirim frame yang sama dua kali. Part hanya ditulis bila
    `seq` lebih besar daripada `seq` terakhir yang dikirim ke klien tersebut.
 4. Enkoder dijalankan satu kali per frame. Enkode ganda (NV21 ke JPEG, decode,
-   lalu JPEG lagi) adalah sisa jalur filter dan harus dihapus.
+   lalu JPEG lagi) adalah sisa jalur filter upstream dan sudah dihapus.
 
 ## 5. Operation service
 
@@ -83,7 +93,7 @@ Aturan:
 | Tipe | Foreground service, tipe `camera` |
 | Notifikasi | Nama perangkat dan jumlah klien aktif |
 | Kamera | Di-bind ke `CameraService`, bukan ke Activity |
-| Start | Otomatis saat boot dan saat operator membuka aplikasi |
+| Start | Saat operator membuka aplikasi. Autostart saat boot ditulis sebagai tujuan, tetapi **belum dapat dipenuhi** pada Android 14+ untuk foreground service tipe `camera` (B-31); keputusan ada di FINDINGS | Hanya lewat perintah eksplisit; tidak berhenti saat Activity selesai |
 | Stop | Hanya lewat perintah eksplisit; tidak berhenti saat Activity selesai |
 | Izin | `CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CAMERA`, `WAKE_LOCK`, `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` |
 
@@ -93,8 +103,8 @@ Tidak ada izin `RECORD_AUDIO`. Mikrofon tidak ada di jalur sensor.
 
 | Aspek | Nilai |
 |---|---|
-| Jaringan | Server hanya mendengarkan pada antarmuka LAN; tidak ada tunneling ke internet |
-| Akses | Token statis pada header `X-Api-Key` untuk `/video` dan `/status` (D-27). Pembatasan alamat IP sebagai lapis kedua opsional. Penolakan dibalas `401` dan dicatat |
+| Jaringan | Server mendengarkan pada alamat hasil pilihan interface operator (Wi-Fi/LAN, USB tethering, atau semua). Pilihan disimpan di `SharedPreferences` dan dibaca saat server start. Bila interface pilihan tidak tersedia, server menolak start, bukan melebar ke `0.0.0.0` |
+| Akses | Token statis pada header `X-Api-Key` untuk `/video` dan `/status` (D-27). `/` tetap terbuka karena hanya berisi judul dan tautan. Pembatasan alamat IP sebagai lapis kedua opsional. Urutan pemeriksaan: `SERVER_MISCONFIGURED`, `ADDRESS_NOT_ALLOWED`, `MISSING_KEY`, `WRONG_KEY`. Penolakan dibalas `401` dengan badan JSON dan dicatat tanpa token |
 | Rahasia | Token, kunci, dan konfigurasi berada pada berkas di luar repo (`local.properties`), diteruskan ke `BuildConfig` saat build |
 | Perintah robot | Tidak ada endpoint yang meneruskan perintah ke ESP32-S3 |
 

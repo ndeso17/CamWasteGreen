@@ -7,21 +7,29 @@ dan stream.
 
 ## Batas peran
 
-Aplikasi ini **hanya** kamera sensor. Peran yang dituju: aplikasi tidak
-menjalankan inferensi, tidak menjalankan model ONNX atau ML Kit, tidak memilih
-target, tidak memetakan bak, dan tidak mengirim perintah ke robot. Deteksi dan
-orkestrasi berada di backend; kendali aktuator berada di ESP32-S3. Peran yang
-dituju juga mengecualikan audio, mikrofon, filter visual, deteksi wajah, dan
-segmentasi selfie dari jalur sensor.
+Aplikasi ini **hanya** kamera sensor. Aplikasi tidak menjalankan inferensi,
+tidak menjalankan model ONNX atau ML Kit, tidak memilih target, tidak memetakan
+bak, dan tidak mengirim perintah ke robot. Deteksi dan orkestrasi berada di
+backend; kendali aktuator berada di ESP32-S3.
+
+Jalur audio, mikrofon, filter visual, deteksi wajah, segmentasi selfie, dan
+stream H.264 sudah dihapus dari kode, bukan hanya dinonaktifkan. Yang tersisa
+pada jalur sensor: kamera, satu enkode JPEG, dan server MJPEG.
+
+Kemampuan yang **belum** terbukti: seluruh butir perangkat pada
+`.work/evidence/manual-verify-kamera.md` masih `BELUM DIUJI`. Autostart kamera
+setelah boot terhalang `B-31` (Android 14+ melarang foreground service tipe
+`camera` dimulai dari latar belakang).
 
 ## Keadaan pekerjaan
 
-Peran di atas adalah target. Status per work package, termasuk sisa jalur
-upstream yang belum ditutup, tidak dicatat di berkas ini karena akan cepat
-basi. Sumber status tunggal:
+Status per work package tidak dicatat di berkas ini karena akan cepat basi.
+Sumber status tunggal:
 
 - `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` — daftar WP, status
   `todo`/`wip`/`qc`/`rework`/`done`, dan Log tiap WP.
+- `.work/evidence/baseline-camwastegreen.md` — hasil terakhir perintah gerbang
+  beserta commit yang diuji.
 - `AGENTS.md` — struktur berkas terkini dan daftar defek yang sudah atau belum
   tertutup.
 
@@ -39,11 +47,15 @@ lisensi repo ini dijelaskan pada [LICENSE](LICENSE).
 ## Status pengembangan
 
 Perbaikan temuan audit kamera 7 November 2026 dikerjakan sebagai work package
-menurut `.work/Plan_PenambalanTemuanKamera_07112026-170214.md`. Baca PLAN untuk
-tahu WP mana yang sudah selesai; `README.md` tidak mengulang daftar itu.
+menurut PLAN. `README.md` tidak mengulang daftar WP.
 
 Belum ada pengukuran FPS, latensi, atau bandwidth pada perangkat sasaran.
-Angka yang muncul di dokumen adalah default konfigurasi, bukan ambang mutu.
+Angka yang muncul di dokumen (1280x720, 20 FPS, quality 80, maks 2 klien, port
+8085) adalah default konfigurasi menurut D-29, bukan ambang mutu. Ambang mutu
+menunggu `B-06`.
+
+Akses `/video` dan `/status` memerlukan header `X-Api-Key`. Cara membuat dan
+mengisi token ada di [docs/token.md](docs/token.md).
 
 ## Bangun dan uji
 

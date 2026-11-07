@@ -3613,24 +3613,24 @@ Pemeriksaan sendiri (bukan QC independen):
 
 ## WP-29 — Sinkronkan `AGENTS.md`, `README.md`, dan dokumen `.work/`
 
-Status: todo
+Status: qc
 
 File: `AGENTS.md`, `README.md`, `.work/Structure.md`, `.work/Architecture.md`
 
 Dependensi: WP-28.
 
 Tugas:
-- [ ] T-077 Perbarui `AGENTS.md` repo: struktur baru (`stream/`, `camera/`,
+- [x] T-077 Perbarui `AGENTS.md` repo: struktur baru (`stream/`, `camera/`,
       `CameraService`, `BootReceiver`), perintah gerbang, daftar defek yang
       sudah tertutup, serta daftar blocker pada bagian SOURCE OF TRUTH dan
       OPEN DECISIONS sehingga B-21/B-28/B-29 tidak lagi tercantum sebagai
       terbuka dan B-30 tercatat selesai (CWG-N06; temuan QC-01 WP-01).
-- [ ] T-078 Perbarui `.work/Structure.md`: hapus entri berkas yang dihapus,
+- [x] T-078 Perbarui `.work/Structure.md`: hapus entri berkas yang dihapus,
       tambah komponen baru, dan perbarui tabel nasib berkas (CWG-01).
-- [ ] T-079 Perbarui `.work/Architecture.md`: alur frame memakai
+- [x] T-079 Perbarui `.work/Architecture.md`: alur frame memakai
       `FrameEncoder` → `FrameSource` → `MultipartWriter`, tanpa preview pada
       v1, dan status otorisasi token (CWG-01, CWG-11, CWG-15).
-- [ ] T-085 Perbarui `README.md` setelah seluruh WP kode selesai: ubah
+- [x] T-085 Perbarui `README.md` setelah seluruh WP kode selesai: ubah
       kalimat "Peran yang dituju" menjadi pernyataan keadaan yang benar
       setelah WP-03..WP-31 tuntas, dan hilangkan duplikasi dengan bagian
       "Status pengembangan" (CWG-N06; temuan QC-11 dan QC-12 WP-02).
@@ -3652,6 +3652,91 @@ Kriteria terima:
 
 Risiko: dokumen menyimpang dari kode setelah refactor.
 Mitigasi: pemeriksaan path nyata pada kriteria terima; QC memverifikasi ulang.
+
+### Log WP-29 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`. Empat berkas: `AGENTS.md`,
+`README.md`, `.work/Structure.md`, `.work/Architecture.md`.
+
+`AGENTS.md` ditulis ulang:
+- Struktur baru: `CameraService`, `BootReceiver`, `camera/CameraTuning.kt`, dan
+  12 berkas `stream/`.
+- Blocker `B-21`, `B-28`, `B-29`, `B-30` dinyatakan selesai beserta keputusan
+  penutupnya (D-27..D-30). Yang masih terbuka: `B-03`, `B-06`, `B-24`, `B-31`.
+- Sepuluh defek audit diganti tabel status: mana yang ditutup di kode, mana
+  yang masih perlu uji perangkat. Tidak ada klaim bahwa uji perangkat sudah
+  dilakukan.
+- Toolchain dicatat: Gradle 8.13, AGP 8.13.0, Kotlin 2.0.21.
+
+`.work/Structure.md`:
+- Peta direktori dan tabel tanggung jawab disesuaikan dengan 17 berkas nyata.
+- Bagian "Komponen target" memakai path lengkap; baris `CameraController`
+  dihapus karena kelas itu tidak pernah dibuat (pengaturan kamera ada di
+  `CameraService`, kunci di `CameraTuning`). Diganti baris `CameraTuning`,
+  `ApiAuth`, `StreamSession`, `NetworkChoice`, `StreamInterfacePrefs`.
+- Bagian "Berkas yang sudah dihapus" semula mendaftar nama berkas lama. Nama
+  itu dihapus dari dokumen agar kriteria `grep` bersih; rincian per berkas
+  tetap ada di Log WP terkait.
+- Konvensi 2 diperbarui: `FrameBuffer` tidak ada lagi; singleton yang tersisa
+  hanya `MJPEGServerInstance`, dan itu hanya meneruskan.
+
+`.work/Architecture.md`:
+- Alur frame ditulis sesuai kode: `FrameEncoder.encode` (rotasi + satu enkode)
+  lalu `FrameSource.publish`, bukan urutan lama yang menaruh `publish` sebelum
+  enkode.
+- Kunci AE/AWB/AF dijelaskan berada di luar jalur per frame, dipicu setelah
+  `WARMUP_FRAMES`, dan tidak mengubah `cameraState`.
+- Baris `CameraController` pada tabel komponen diganti `CameraTuning`.
+- Baris `Start` diberi catatan bahwa autostart boot belum dapat dipenuhi pada
+  Android 14+ (B-31), bukan ditulis seolah sudah berjalan.
+- Batas keamanan menyebut urutan pemeriksaan `ApiAuth` dan alasan `/` tetap
+  terbuka; batas jaringan menyebut pilihan interface dan penolakan start bila
+  interface tidak tersedia.
+
+`README.md`:
+- "Peran yang dituju" diganti pernyataan keadaan: jalur audio, filter, ML Kit,
+  dan H.264 sudah dihapus dari kode, bukan dinonaktifkan.
+- Ditambahkan bagian kemampuan yang belum terbukti: seluruh MANUAL-VERIFY
+  `BELUM DIUJI` dan autostart terhalang B-31.
+- Duplikasi dengan "Status pengembangan" dihapus: bagian itu tidak lagi
+  mengulang daftar WP, hanya menunjuk PLAN, baseline, dan `AGENTS.md`.
+- Ditambahkan rujukan `docs/token.md` untuk header `X-Api-Key`.
+
+Kriteria:
+
+```text
+grep -rn "MicManager\|FilterPipeline\|FrameBuffer\|previewView" AGENTS.md .work/Structure.md .work/Architecture.md
+  -> tidak ada hasil (exit 1)
+
+grep -n "B-21\|B-28\|B-29" AGENTS.md
+  32: Blocker yang sudah selesai: `B-21` kontrak stream ditutup D-27 dan D-29
+  33: (`/video` + `/status`, 1280x720, 20 FPS, q80, maks 2 klien); `B-28` model
+  34: otorisasi sisi kamera ditutup D-27 (token statis `X-Api-Key`); `B-29` lisensi
+  -> hanya rujukan "sudah selesai"
+
+grep -n "Keadaan saat ini" README.md
+  -> tidak ada hasil (exit 1)
+grep -n "MicManager\|FilterPipeline\|StreamEncoder\|TcpStreamServer\|bindToLifecycle\|RECORD_AUDIO" README.md
+  -> tidak ada hasil
+
+path di .work/Structure.md bagian 3: 11 path, 11 ada (ls per path)
+```
+
+Keterbatasan: sinkronisasi dokumen hanya membuktikan dokumen cocok dengan kode
+saat ini. Ia tidak membuktikan perilaku pada perangkat.
+
+### Log WP-29 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — tiga kriteria grep bernilai kosong atau hanya memuat pernyataan
+  "selesai".
+- PASS — 11 path pada `Structure.md` bagian 3 semuanya ada di disk.
+- PASS — tidak ada lagi rujukan ke `CameraController` sebagai komponen nyata.
+- PASS — `Architecture.md` menyatakan sendiri bahwa autostart boot belum
+  terpenuhi; tidak ada klaim kemampuan yang tidak ada.
+- CATATAN — nama berkas lama dihapus dari `Structure.md` demi kriteria grep;
+  jejaknya tetap di Log WP-03/05/08/15/31 dan di `FINDINGS.md`.
 
 ---
 

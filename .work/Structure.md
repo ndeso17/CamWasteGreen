@@ -19,22 +19,37 @@ CamWasteGreen/
 │       ├── main/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/dev/ndeso17/camwastegreen/
-│       │   │   ├── MainActivity.kt
-│       │   │   ├── MjpegHttpServer.kt
-│       │   │   ├── MJPEGServerInstance.kt
-│       │   │   ├── FrameBuffer.kt
-│       │   │   ├── MicManager.kt
-│       │   │   ├── StreamEncoder.kt
-│       │   │   ├── TcpStreamServer.kt
-│       │   │   ├── EqualizerView.kt
-│       │   │   ├── ai/                  # deteksi wajah, segmentasi selfie
-│       │   │   ├── gpuimage/            # shader filter OpenGL
-│       │   │   └── pipeline/            # FilterPipeline (filter + AI)
+│       │   │   ├── MainActivity.kt        # UI operator, pilihan interface
+│       │   │   ├── CameraService.kt       # foreground service + analyzer
+│       │   │   ├── MJPEGServerInstance.kt # singleton server + status
+│       │   │   ├── BootReceiver.kt        # BOOT_COMPLETED
+│       │   │   ├── camera/
+│       │   │   │   └── CameraTuning.kt    # kunci AE/AWB/AF
+│       │   │   └── stream/
+│       │   │       ├── MjpegHttpServer.kt
+│       │   │       ├── ApiAuth.kt
+│       │   │       ├── CameraConfig.kt
+│       │   │       ├── FrameEncoder.kt
+│       │   │       ├── FramePacket.kt
+│       │   │       ├── FrameSource.kt
+│       │   │       ├── MultipartWriter.kt
+│       │   │       ├── NetworkChoice.kt
+│       │   │       ├── Nv21Transform.kt
+│       │   │       ├── StatusRegistry.kt
+│       │   │       ├── StreamInterfacePrefs.kt
+│       │   │       └── StreamSession.kt
 │       │   └── res/
 │       ├── test/java/dev/ndeso17/camwastegreen/
 │       └── androidTest/java/dev/ndeso17/camwastegreen/
-├── docs/                        # spesifikasi desain H.264 bawaan upstream
-├── tools/                       # skrip virtual camera driver / OBS bridge
+├── .work/
+│   ├── PRD.md
+│   ├── Architecture.md
+│   ├── Structure.md
+│   ├── Rules.md
+│   ├── Plan_PenambalanTemuanKamera_07112026-170214.md
+│   └── evidence/                # baseline gerbang, checklist MANUAL-VERIFY
+├── docs/                        # token.md; superpowers/ catatan upstream
+├── tools/                       # skrip virtual camera driver / OBS bridge (tidak dipakai)
 ├── gradle/libs.versions.toml
 ├── settings.gradle.kts
 └── build.gradle.kts
@@ -42,38 +57,54 @@ CamWasteGreen/
 
 ## 2. Tanggung jawab berkas
 
-| Berkas | Tanggung jawab | Nasib dalam target |
-|---|---|---|
-| `MainActivity.kt` | UI operator dan siklus hidup Activity | Diperkecil; kamera pindah ke service |
-| `MjpegHttpServer.kt` | Server NanoHTTPD untuk `/video` dan `/status` | Dipertahankan dan diperbaiki: header, dedupe, batas klien, autentikasi |
-| `MJPEGServerInstance.kt` | Pembungkus singleton server | Dipertahankan |
-| `FrameBuffer.kt` | Penyimpan frame terakhir | Diperluas: seq, capturedAtMs, width, height |
-| `MicManager.kt` | Perekam audio | Dihapus |
-| `ai/AiProcessor.kt` | Pembungkus ML Kit | Dihapus |
-| `ai/FaceDetector.kt` | Deteksi wajah ML Kit | Dihapus |
-| `ai/SelfieSegmenter.kt` | Segmentasi selfie ML Kit | Dihapus |
-| `gpuimage/*` | Shader OpenGL untuk filter | Dihapus dari jalur sensor |
-| `pipeline/FilterPipeline.kt` | Filter, AI, dan enkode ganda | Dihapus atau dipangkas menjadi encoder tunggal |
-| `StreamEncoder.kt` | Enkoder H.264 | Tidak dipakai di v1; tetap ada sampai ada keputusan |
-| `TcpStreamServer.kt` | Server TCP untuk NAL H.264 | Tidak dipakai di v1 |
-| `EqualizerView.kt` | UI equalizer | Tidak relevan untuk sensor |
-| `tools/*` | Virtual camera driver dan OBS bridge | Tidak dipakai di jalur operasi |
+| Berkas | Tanggung jawab |
+|---|---|
+| `MainActivity.kt` | UI operator: izin, start/stop, pilihan interface jaringan, tampilan alamat |
+| `CameraService.kt` | Foreground service tipe `camera`; mengikat CameraX, menjalankan analyzer, memicu kunci tuning, notifikasi status |
+| `MJPEGServerInstance.kt` | Singleton server, kandidat alamat dari `NetworkInterface`, penyedia token, penerusan frame ke `FrameSource` |
+| `BootReceiver.kt` | Menerima `BOOT_COMPLETED` dan meminta service start; hasilnya bergantung B-31 |
+| `camera/CameraTuning.kt` | Memasang `CONTROL_AE_LOCK`, `CONTROL_AWB_LOCK`, `CONTROL_AF_MODE_OFF` lewat Camera2Interop |
+| `stream/MjpegHttpServer.kt` | NanoHTTPD: `/` (halaman diagnosa), `/video`, `/status`; otorisasi, dedupe, balasan galat |
+| `stream/ApiAuth.kt` | Verifikasi `X-Api-Key` waktu-tetap dan daftar alamat yang diizinkan |
+| `stream/CameraConfig.kt` | Default resolusi, FPS, kualitas JPEG, batas klien, port; validasi nilai |
+| `stream/FrameEncoder.kt` | Satu enkode YUV ke JPEG per frame, termasuk rotasi |
+| `stream/FramePacket.kt` | Data frame: `jpeg`, `seq`, `capturedAtMs`, `width`, `height` |
+| `stream/FrameSource.kt` | Menyimpan satu frame terakhir dan memberi nomor urut |
+| `stream/MultipartWriter.kt` | Menyusun header part MJPEG |
+| `stream/StatusRegistry.kt` | Status terukur: `measuredFps`, `clients`, `cameraState`, `tuningState` |
+| `stream/StreamSession.kt` | Dedupe per klien, batas jumlah klien, batas waktu tulis |
+| `stream/StreamInterfacePrefs.kt` | Menyimpan dan membaca pilihan interface |
+| `stream/NetworkChoice.kt` | Daftar pilihan interface dan alamat bind hasilnya |
+| `stream/Nv21Transform.kt` | Rotasi NV21 murni, tanpa Android |
+| `tools/*` | Virtual camera driver dan OBS bridge upstream; tidak dipakai di jalur operasi |
 
-Berkas bertanda dihapus adalah sisa jalur demo ipcam yang tidak relevan untuk
-kamera sensor. Penghapusan harus lewat work package tersendiri agar build
-tetap hijau.
+### Berkas yang sudah dihapus
+
+Jalur demo upstream (audio, filter visual, ML Kit, enkode H.264 ganda, buffer
+frame lama, dan equalizer) sudah dihapus dari repo. Rincian per berkas ada di
+Log WP-03, WP-05, WP-08, WP-15, dan WP-31 pada PLAN; tidak didaftar ulang di
+sini agar dokumen ini tidak memuat nama berkas yang sudah tidak ada.
 
 ## 3. Komponen target (hasil akhir)
 
-| Komponen | Lokasi baru | Rujukan |
+| Komponen | Lokasi | Rujukan |
 |---|---|---|
 | `CameraService` | `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt` | Architecture bagian 5 |
-| `CameraController` | `.../camera/CameraController.kt` | Architecture bagian 2 |
-| `FrameSource` | `.../stream/FrameSource.kt` | Architecture bagian 3 |
-| `FrameEncoder` | `.../stream/FrameEncoder.kt` | Architecture bagian 4 |
-| `MjpegHttpServer` | `.../stream/MjpegHttpServer.kt` | Architecture bagian 2 |
-| `StatusRegistry` | `.../stream/StatusRegistry.kt` | Architecture bagian 3 |
-| `BootReceiver` | `.../BootReceiver.kt` | CWG-12 |
+| `BootReceiver` | `app/src/main/java/dev/ndeso17/camwastegreen/BootReceiver.kt` | CWG-12 |
+| `CameraTuning` | `app/src/main/java/dev/ndeso17/camwastegreen/camera/CameraTuning.kt` | CWG-07 |
+| `FrameSource` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameSource.kt` | Architecture bagian 3 |
+| `FrameEncoder` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameEncoder.kt` | Architecture bagian 4 |
+| `MjpegHttpServer` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt` | Architecture bagian 2 |
+| `StatusRegistry` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/StatusRegistry.kt` | Architecture bagian 3 |
+| `ApiAuth` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/ApiAuth.kt` | CWG-15 |
+| `StreamSession` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamSession.kt` | CWG-09, CWG-10 |
+| `NetworkChoice` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/NetworkChoice.kt` | CWG-10 |
+| `StreamInterfacePrefs` | `app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefs.kt` | CWG-10 |
+
+Catatan: tidak ada kelas `CameraController` terpisah. Pengaturan kamera berada
+di `CameraService`, dan kunci eksposur/warna/fokus berada di `CameraTuning`.
+Dokumen ini sebelumnya menyebut `CameraController` sebagai rencana; rencana itu
+tidak dipakai agar tidak ada lapisan tambahan tanpa pemilik state yang jelas.
 
 Pemindahan dan pemisahan paket adalah bagian dari work package refactor.
 Struktur akhir tidak boleh mencampur tanggung jawab.
@@ -84,7 +115,9 @@ Struktur akhir tidak boleh mencampur tanggung jawab.
    secara langsung.
 2. State yang diakses lintas komponen hanya lewat pemilik tunggalnya
    (Architecture bagian 3). Hindari `object` global yang ditulis dari banyak
-   tempat; `FrameBuffer` adalah pengecualian sementara yang wajib dibongkar.
+   tempat. `MJPEGServerInstance` adalah singleton yang tersisa; ia hanya
+   meneruskan ke `FrameSource` dan `StatusRegistry`, tidak menyimpan state
+   sendiri.
 3. Nilai yang diukur dan nilai yang dikonfigurasi harus punya nama berbeda dan
    jenis berbeda. Contoh: `measuredFps`, bukan `fps`.
 4. Konstanta numerik yang memengaruhi kualitas sinyal (resolusi, FPS, quality
@@ -99,7 +132,7 @@ Struktur akhir tidak boleh mencampur tanggung jawab.
 |---|---|
 | Unit test | `app/src/test/java/dev/ndeso17/camwastegreen/` |
 | Uji instrumen | `app/src/androidTest/java/dev/ndeso17/camwastegreen/` |
-| Bukti manual | `.work/evidence/` (belum ada) |
+| Bukti manual | `.work/evidence/` (`baseline-camwastegreen.md`, `manual-verify-kamera.md`) |
 | Laporan lint | `app/build/reports/lint-results-debug.txt` |
 
 Uji yang wajib ada setelah refactor:
