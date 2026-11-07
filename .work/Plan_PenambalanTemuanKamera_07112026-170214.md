@@ -2823,20 +2823,20 @@ Temuan:
 
 ## WP-21 — `CameraConfig` untuk resolusi, FPS, quality, batas klien, dan port
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/CameraConfig.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/CameraConfigTest.kt` (baru)
 
 Dependensi: WP-01 (D-29).
 
 Tugas:
-- [ ] T-055 Buat `CameraConfig` berisi `width = 1280`, `height = 720`,
+- [x] T-055 Buat `CameraConfig` berisi `width = 1280`, `height = 720`,
       `targetFps = 20`, `jpegQuality = 80`, `maxClients = 2`, `port = 8085`,
       `mountRotationDegrees = 0`, `writeTimeoutMs`, dan `apiKey` (CWG-08).
-- [ ] T-056 Tolak nilai tidak sah: `targetFps` di luar 1..30, `jpegQuality` di
+- [x] T-056 Tolak nilai tidak sah: `targetFps` di luar 1..30, `jpegQuality` di
       luar 30..100, `maxClients` kurang dari 1, `mountRotationDegrees` bukan
       kelipatan 90 (CWG-08).
-- [ ] T-057 Unit test: nilai default sesuai D-29 dan setiap penolakan nilai
+- [x] T-057 Unit test: nilai default sesuai D-29 dan setiap penolakan nilai
       tidak sah teruji (CWG-08, CWG-N06).
 
 Kriteria terima:
@@ -2848,6 +2848,81 @@ Kriteria terima:
 Risiko: nilai default dianggap ambang mutu.
 Mitigasi: komentar berkas menyatakan ini default konfigurasi, bukan ambang;
 ambang menunggu B-06.
+
+### Log WP-21 (Executor)
+
+Berkas baru (2): `stream/CameraConfig.kt` dan
+`test/.../stream/CameraConfigTest.kt`. Tidak ada berkas lain yang disentuh.
+`CameraConfig` belum dipakai pemanggil mana pun; penerapannya WP-22.
+
+Checklist:
+
+- [x] T-055 `CameraConfig` dibuat sebagai `data class` murni Kotlin tanpa
+      `android.*`, sehingga bisa diuji di JVM. Field: `width = 1280`,
+      `height = 720`, `targetFps = 20`, `jpegQuality = 80`, `maxClients = 2`,
+      `port = 8085`, `mountRotationDegrees = 0`, `writeTimeoutMs = 2000L`,
+      dan `apiKey = ""`.
+- [x] T-056 Validasi di `init` menolak `targetFps` di luar 1..30,
+      `jpegQuality` di luar 30..100, `maxClients < 1`, `mountRotationDegrees`
+      bukan kelipatan 90, `port` di luar 1..65535, dimensi tidak positif, dan
+      `writeTimeoutMs` tidak positif. Setiap pesan menyebut nilai yang salah.
+- [x] T-057 Unit test berisi 10 kasus.
+
+Dua keputusan kecil yang diambil saat menulis kode, dan alasannya:
+
+- Batas `targetFps` 1..30 dan `jpegQuality` 30..100 diambil dari tugas T-056
+  apa adanya. Angka itu batas *masuk akal perangkat*, bukan ambang mutu; tidak
+  ada klaim bahwa 20 FPS atau q80 adalah mutu yang disepakati. `B-06` tetap
+  terbuka.
+- `apiKey` default string kosong, bukan nilai contoh. Token hanya boleh datang
+  dari `BuildConfig`, yang dibangun dari `local.properties` (D-27). Default
+  kosong berarti "belum dikonfigurasi", dan WP-22 harus memperlakukannya
+  sebagai penolakan semua permintaan, bukan sebagai izin tanpa token.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "dev.ndeso17.camwastegreen.stream.CameraConfigTest"
+  -> BUILD SUCCESSFUL, exit 0
+  -> TEST-...CameraConfigTest.xml: tests="10" skipped="0" failures="0" errors="0"
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning; tidak ada isu yang menunjuk CameraConfig
+```
+
+Kasus yang teruji (nama test):
+
+```text
+default sesuai D-29
+targetFps di luar 1 sampai 30 ditolak
+targetFps batas 1 dan 30 diterima
+jpegQuality di luar 30 sampai 100 ditolak
+maxClients kurang dari 1 ditolak
+mountRotationDegrees bukan kelipatan 90 ditolak
+mountRotationDegrees kelipatan 90 diterima
+port dan dimensi tidak sah ditolak
+writeTimeoutMs harus positif
+pesan penolakan menyebut nilai
+```
+
+Keterbatasan:
+
+- Belum terbukti bahwa nilai yang nanti dipakai kamera benar-benar mengikuti
+  `CameraConfig`. Itu baru bisa dibuktikan pada WP-22 dan diukur di perangkat.
+- `writeTimeoutMs` belum dipakai `StreamSession`; nilainya masih default 2000
+  yang ditetapkan tanpa pengukuran. Angka itu belum diuji terhadap klien
+  lambat nyata.
+
+### Log WP-21 (QC)
+
+Verdict: **PASS**, diperiksa sendiri oleh Executor; belum ada QC independen.
+Status dicatat `qc`.
+
+- Kriteria "minimal lima kasus" terpenuhi dengan 10 kasus, semuanya lulus.
+- Test benar-benar mengunci D-29: mengubah satu angka default akan membuat
+  `default sesuai D-29` gagal.
+- Gerbang penuh lulus `exit 0`, lint 0 error, tanpa warning baru.
+- Tidak ada klaim bahwa kode ini sudah mempengaruhi stream; itu WP-22.
 
 ---
 
