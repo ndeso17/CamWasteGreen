@@ -2928,19 +2928,19 @@ Status dicatat `qc`.
 
 ## WP-22 — Terapkan `CameraConfig` pada service dan server
 
-Status: todo
+Status: qc
 
-File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt`
+File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/MJPEGServerInstance.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameEncoder.kt`
 
 Dependensi: WP-21.
 
 Tugas:
-- [ ] T-058 Service memakai `width`, `height`, `targetFps`, `jpegQuality`, dan
+- [x] T-058 Service memakai `width`, `height`, `targetFps`, `jpegQuality`, dan
       `mountRotationDegrees` dari `CameraConfig`, bukan konstanta di dalam
       fungsi (CWG-08).
-- [ ] T-059 Server memakai `port` dan `maxClients` dari `CameraConfig`
+- [x] T-059 Server memakai `port` dan `maxClients` dari `CameraConfig`
       (CWG-08, CWG-10).
-- [ ] T-060 `/status` menampilkan `width`, `height`, dan `clients` dari nilai
+- [x] T-060 `/status` menampilkan `width`, `height`, dan `clients` dari nilai
       yang benar-benar dipakai (CWG-05).
 
 Kriteria terima:
@@ -2954,6 +2954,111 @@ Risiko: nilai konfigurasi tidak sama dengan resolusi yang benar-benar dipilih
 kamera.
 Mitigasi: `/status` melaporkan lebar/tinggi frame nyata dari `FramePacket`,
 bukan nilai konfigurasi.
+
+### Log WP-22 (Executor)
+
+Berkas berubah (4): `CameraService.kt`, `MJPEGServerInstance.kt`,
+`stream/MjpegHttpServer.kt`, `stream/FrameEncoder.kt`.
+
+**Deviasi daftar berkas.** WP-22 semula menyebut dua berkas. Saat dikerjakan,
+nilai yang harus dipindahkan ternyata tidak semuanya ada di sana:
+`DEFAULT_PORT`, `DEFAULT_MAX_CLIENTS`, dan `DEFAULT_WRITE_TIMEOUT_MS` tinggal
+di `MJPEGServerInstance.kt`, sedangkan rotasi pemasangan harus diterapkan di
+`FrameEncoder.kt`. Memindahkan sebagian saja akan menyisakan dua sumber nilai
+yang bisa menyimpang, jadi keempat berkas disentuh. Masih dalam batas 5
+berkas. `stream/MjpegHttpServer.kt` tidak perlu diubah: ia memang sudah
+menerima `port`, `maxClients`, dan `writeTimeoutMs` dari pemanggil, dan tidak
+memuat angka 1280/720/8085.
+
+Checklist:
+
+- [x] T-058 Service membaca `width`, `height`, `targetFps`, `jpegQuality`,
+      dan `mountRotationDegrees` dari `CameraConfig`. `DEFAULT_FPS` dan
+      `DEFAULT_QUALITY` dihapus, diganti satu `DEFAULT_CONFIG = CameraConfig()`.
+      Batas `coerceIn` untuk FPS dan kualitas kini memakai
+      `CameraConfig.MIN_FPS/MAX_FPS/MIN_QUALITY/MAX_QUALITY`, bukan angka
+      literal. Setiap perubahan FPS/kualitas menyusun ulang `config` lewat
+      `copy`, sehingga validasi `CameraConfig` tetap berlaku pada nilai
+      runtime.
+- [x] T-059 Server memakai `port`, `maxClients`, dan `writeTimeoutMs` dari
+      `CameraConfig`. `MJPEGServerInstance` menyimpan `config` sebagai
+      satu-satunya sumber nilai; konstanta `DEFAULT_*` di sana dihapus.
+      `CameraService` memanggil `MJPEGServerInstance.start(this, config)`.
+- [x] T-060 `/status` tetap melaporkan `width` dan `height` dari frame nyata
+      (`FramePacket` lewat `StatusRegistry`), bukan dari `CameraConfig`, dan
+      `clients` dari `StreamSession`. Tidak ada perubahan kode yang diperlukan
+      untuk tugas ini; perilakunya dibuktikan di perangkat.
+
+Perubahan pada `FrameEncoder`: `encode()` mendapat parameter ketiga
+`mountRotationDegrees` dengan default `0`, dan rotasi total dihitung sebagai
+`(rotationDegrees sensor + mountRotationDegrees) mod 360`. Default `0` menjaga
+pemanggil lama dan test lama tetap sah. `CameraConfig` sudah menolak nilai
+bukan kelipatan 90, sehingga `Nv21Transform.rotateNv21` tidak akan menerima
+sudut tak sah dari jalur ini.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+grep -n "1280|720|8085|setTargetResolution" \
+    CameraService.kt stream/MjpegHttpServer.kt
+  CameraService.kt:323:  .setTargetResolution(Size(config.width, config.height))
+  -> satu-satunya hasil; angkanya berasal dari CameraConfig, bukan literal.
+     Penghapusan setTargetResolution seluruhnya adalah WP-23.
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning; tidak ada isu pada CameraService,
+      MJPEGServerInstance, atau FrameEncoder
+```
+
+Bukti perangkat (moto g57 power, `ZP2222SQLL`, Android 16, APK dipasang ulang;
+server diakses lewat `adb forward tcp:18085 tcp:8085`):
+
+```text
+curl http://127.0.0.1:18085/status
+{"streaming":true,"cameraState":"streaming","cameraStateReason":null,
+ "frameSeq":4,"measuredFps":1.838,
+ "width":1440,"height":1440,"clients":0}
+```
+
+`width`/`height` bernilai **1440x1440**, bukan 1280x720 yang diminta
+`CameraConfig`. Ini bukti bahwa `/status` melaporkan frame nyata, bukan nilai
+konfigurasi — dan sekaligus menegaskan QC-46 masih ada. WP-23 wajib
+menanganinya.
+
+Batas klien diuji dengan tiga koneksi `/video` bersamaan:
+
+```text
+conn3:503        (klien ketiga ditolak)
+conn1:200        (klien pertama diterima)
+/status -> "clients":2
+```
+
+Jadi `maxClients = 2` dari `CameraConfig` benar-benar berlaku, bukan hanya
+tersimpan.
+
+Keterbatasan yang harus dinyatakan:
+
+- `mountRotationDegrees` belum terbukti dengan nilai bukan nol. Default-nya
+  `0`, sehingga jalur penambahan rotasi belum pernah dijalankan di perangkat.
+  Tidak ada unit test untuk `FrameEncoder.encode` karena ia butuh
+  `ImageProxy` (android.*). Yang teruji adalah `Nv21Transform` untuk sudut
+  0/90/180/270.
+- `writeTimeoutMs = 2000L` kini berasal dari `CameraConfig`, tetapi belum diuji
+  dengan klien lambat nyata.
+- FPS terukur tetap ~1,6–1,8 meski `targetFps` 20. Itu QC-47 dan bukan
+  perubahan WP-22.
+
+### Log WP-22 (QC)
+
+Verdict: **PASS untuk kriteria tertulis**, diperiksa sendiri oleh Executor;
+belum ada QC independen. Status dicatat `qc`.
+
+- Ketiga tugas selesai; nilai kamera dan server kini berasal dari satu kelas.
+- Kriteria grep terpenuhi: satu-satunya hasil adalah rujukan ke `CameraConfig`.
+- Gerbang lulus `exit 0`; lint tetap 0 error / 63 warning.
+- Bukti perangkat membuktikan dua hal berbeda: `/status` memakai dimensi nyata,
+  dan `maxClients` dari config menolak klien ketiga.
+- Keterbatasan rotasi pemasangan dan `writeTimeoutMs` dicatat, tidak diklaim.
 
 ---
 

@@ -2,6 +2,7 @@ package dev.ndeso17.camwastegreen
 
 import android.content.Context
 import android.util.Log
+import dev.ndeso17.camwastegreen.stream.CameraConfig
 import dev.ndeso17.camwastegreen.stream.FrameSource
 import dev.ndeso17.camwastegreen.stream.MjpegHttpServer
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
@@ -19,10 +20,16 @@ object MJPEGServerInstance {
 
     private const val TAG = "MJPEGServerInstance"
 
-    /** Default konfigurasi, bukan ambang mutu (D-29). */
-    private const val DEFAULT_PORT = 8085
-    private const val DEFAULT_MAX_CLIENTS = 2
-    private const val DEFAULT_WRITE_TIMEOUT_MS = 5000L
+    /**
+     * Konfigurasi yang sedang dipakai server.
+     *
+     * Satu-satunya sumber nilai port, batas klien, dan batas waktu tulis.
+     * Default-nya berasal dari [CameraConfig], bukan konstanta lokal, supaya
+     * resolusi/FPS/kualitas dan nilai server tidak bisa menyimpang (CWG-08).
+     */
+    @Volatile
+    var config: CameraConfig = CameraConfig()
+        private set
 
     private val frameSource = FrameSource()
 
@@ -37,7 +44,9 @@ object MJPEGServerInstance {
      * @return `true` bila server berjalan (baru atau sudah), `false` bila gagal
      */
     @Synchronized
-    fun start(context: Context, port: Int = DEFAULT_PORT): Boolean {
+    fun start(context: Context, config: CameraConfig = this.config): Boolean {
+        this.config = config
+        val port = config.port
         server?.let {
             Log.i(TAG, "Server sudah berjalan di port ${it.listeningPort}")
             return true
@@ -48,8 +57,8 @@ object MJPEGServerInstance {
                 frameSource = frameSource,
                 statusRegistry = statusRegistry,
                 port = port,
-                maxClients = DEFAULT_MAX_CLIENTS,
-                writeTimeoutMs = DEFAULT_WRITE_TIMEOUT_MS
+                maxClients = config.maxClients,
+                writeTimeoutMs = config.writeTimeoutMs
             )
             created.start(SOCKET_READ_TIMEOUT_MS, true)
             server = created

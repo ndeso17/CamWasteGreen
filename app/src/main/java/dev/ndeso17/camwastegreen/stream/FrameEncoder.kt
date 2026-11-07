@@ -33,18 +33,21 @@ object FrameEncoder {
     /**
      * Enkode satu frame.
      *
+     * @param mountRotationDegrees rotasi pemasangan dari [CameraConfig],
+     *   ditambahkan ke rotasi sensor. Nilai harus kelipatan 90; `CameraConfig`
+     *   sudah menolak yang lain.
      * @return [EncodedFrame] dengan dimensi hasil rotasi, atau `null` bila
      *   buffer tidak dapat dibaca atau enkode gagal. Pemanggil yang mencatat
      *   alasan kegagalan pada status kamera.
      */
-    fun encode(image: ImageProxy, quality: Int): EncodedFrame? {
+    fun encode(image: ImageProxy, quality: Int, mountRotationDegrees: Int = 0): EncodedFrame? {
         return try {
             val sourceWidth = image.width
             val sourceHeight = image.height
             if (sourceWidth <= 0 || sourceHeight <= 0) return null
 
             val nv21 = toNv21(image, sourceWidth, sourceHeight)
-            val degrees = image.imageInfo.rotationDegrees
+            val degrees = ((image.imageInfo.rotationDegrees + mountRotationDegrees) % 360 + 360) % 360
             val rotated = if (degrees == 0) {
                 nv21
             } else {

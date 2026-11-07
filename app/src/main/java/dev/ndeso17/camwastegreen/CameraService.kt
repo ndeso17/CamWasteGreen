@@ -29,6 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import dev.ndeso17.camwastegreen.stream.CameraConfig
 import dev.ndeso17.camwastegreen.stream.FrameEncoder
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
 import dev.ndeso17.camwastegreen.stream.StatusSnapshot
@@ -72,10 +73,12 @@ class CameraService : Service(), LifecycleOwner {
         private const val EXTRA_FPS = "extra_fps"
         private const val EXTRA_QUALITY = "extra_quality"
 
-        /** Nilai sementara; WP-22 memindahkannya ke `CameraConfig` (D-29). */
-        private const val DEFAULT_FPS = 20
-        private const val DEFAULT_QUALITY = 80
-        private const val DEFAULT_PORT = 8085
+        /**
+         * Default konfigurasi (D-29), bukan ambang mutu. Semua nilai kamera dan
+         * server dibaca dari sini supaya tidak ada angka yang tersebar di
+         * dalam fungsi (CWG-08).
+         */
+        private val DEFAULT_CONFIG = CameraConfig()
 
         private const val CHANNEL_ID = "camera_stream"
         private const val CHANNEL_NAME = "Kamera dan stream"
@@ -92,7 +95,11 @@ class CameraService : Service(), LifecycleOwner {
          * sudah memegang izin kamera; bila tidak, service melaporkan
          * kegagalannya sebagai status, bukan mematikan proses.
          */
-        fun start(context: Context, fps: Int = DEFAULT_FPS, quality: Int = DEFAULT_QUALITY) {
+        fun start(
+            context: Context,
+            fps: Int = DEFAULT_CONFIG.targetFps,
+            quality: Int = DEFAULT_CONFIG.jpegQuality
+        ) {
             val intent = Intent(context, CameraService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_FPS, fps)
@@ -161,10 +168,17 @@ class CameraService : Service(), LifecycleOwner {
     private var cameraProvider: ProcessCameraProvider? = null
 
     @Volatile
-    private var targetFps = DEFAULT_FPS
+    private var targetFps = DEFAULT_CONFIG.targetFps
 
     @Volatile
-    private var jpegQuality = DEFAULT_QUALITY
+    private var jpegQuality = DEFAULT_CONFIG.jpegQuality
+
+    /**
+     * Konfigurasi yang dipakai service ini. Disusun ulang lewat [copy] setiap
+     * kali FPS atau kualitas diubah, sehingga validasi `CameraConfig` tetap
+     * berlaku pada nilai runtime.
+     */
+    private var config = DEFAULT_CONFIG
 
     @Volatile
     private var useFrontCamera = false
@@ -206,24 +220,31 @@ class CameraService : Service(), LifecycleOwner {
 
             ACTION_SET_FPS -> {
                 val value = intent.getIntExtra(EXTRA_VALUE, targetFps)
-                targetFps = value.coerceIn(1, 30)
+                targetFps = value.coerceIn(CameraConfig.MIN_FPS, CameraConfig.MAX_FPS)
+                config = config.copy(targetFps = targetFps)
                 Log.i(TAG, "FPS target: $targetFps")
                 return START_STICKY
             }
 
             ACTION_SET_QUALITY -> {
                 val value = intent.getIntExtra(EXTRA_VALUE, jpegQuality)
-                jpegQuality = value.coerceIn(30, 100)
+                jpegQuality = value.coerceIn(CameraConfig.MIN_QUALITY, CameraConfig.MAX_QUALITY)
+                config = config.copy(jpegQuality = jpegQuality)
                 Log.i(TAG, "Kualitas JPEG: $jpegQuality")
                 return START_STICKY
             }
         }
 
         intent?.let {
-            if (it.hasExtra(EXTRA_FPS)) targetFps = it.getIntExtra(EXTRA_FPS, targetFps).coerceIn(1, 30)
-            if (it.hasExtra(EXTRA_QUALITY)) {
-                jpegQuality = it.getIntExtra(EXTRA_QUALITY, jpegQuality).coerceIn(30, 100)
+            if (it.hasExtra(EXTRA_FPS)) {
+                targetFps = it.getIntExtra(EXTRA_FPS, targetFps)
+                    .coerceIn(CameraConfig.MIN_FPS, CameraConfig.MAX_FPS)
             }
+            if (it.hasExtra(EXTRA_QUALITY)) {
+                jpegQuality = it.getIntExtra(EXTRA_QUALITY, jpegQuality)
+                    .coerceIn(CameraConfig.MIN_QUALITY, CameraConfig.MAX_QUALITY)
+            }
+            config = config.copy(targetFps = targetFps, jpegQuality = jpegQuality)
         }
 
         enterForeground()
@@ -299,7 +320,7 @@ class CameraService : Service(), LifecycleOwner {
 
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setTargetResolution(Size(1280, 720))
+            .setTargetResolution(Size(config.width, config.height))
             .build()
 
         // H.264 stream encoder
@@ -324,7 +345,7 @@ class CameraService : Service(), LifecycleOwner {
             provider.bindToLifecycle(this, cameraSelector, imageAnalysis)
 
             if (!MJPEGServerInstance.isRunning()) {
-                if (MJPEGServerInstance.start(this, DEFAULT_PORT)) {
+                if (MJPEGServerInstance.start(this, config)) {
                     Log.i(TAG, "Server MJPEG aktif di port ${MJPEGServerInstance.getPort()}")
                 }
             }
@@ -363,7 +384,7 @@ class CameraService : Service(), LifecycleOwner {
         lastFrameTimestamp = currentTime
 
         try {
-            val encoded = FrameEncoder.encode(imageProxy, jpegQuality)
+            val encoded = FrameEncoder.encode(imageProxy, jpegQuality, config.mountRotationDegrees)
             if (encoded == null) {
                 // Kegagalan enkode dicatat sebagai alasan pada /status
                 MJPEGServerInstance.reportCameraError("encode_failed")
