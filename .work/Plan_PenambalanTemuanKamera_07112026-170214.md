@@ -1282,20 +1282,20 @@ dan WP-11 dapat memakai `FrameSource.latest` serta `lastSeq`.
 
 ## WP-09 — `MultipartWriter` untuk header part MJPEG
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/MultipartWriter.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/MultipartWriterTest.kt` (baru)
 
 Dependensi: WP-08.
 
 Tugas:
-- [ ] T-020 Implementasikan `partHeader(packet: FramePacket, boundary: String): ByteArray`
+- [x] T-020 Implementasikan `partHeader(packet: FramePacket, boundary: String): ByteArray`
       yang menghasilkan blok header dengan `Content-Type: image/jpeg`,
       `Content-Length`, `X-Frame-Seq`, `X-Frame-Captured-At-Ms`,
       `X-Frame-Width`, `X-Frame-Height`, diakhiri CRLF ganda (CWG-02).
-- [ ] T-021 Implementasikan `part(packet, boundary): ByteArray` = header + JPEG +
+- [x] T-021 Implementasikan `part(packet, boundary): ByteArray` = header + JPEG +
       CRLF penutup, tanpa menyalin JPEG dua kali (CWG-N01).
-- [ ] T-022 Unit test: enam header wajib ada, nilai `Content-Length` sama dengan
+- [x] T-022 Unit test: enam header wajib ada, nilai `Content-Length` sama dengan
       `packet.jpeg.size`, `X-Frame-Seq` sama dengan `packet.seq`, pemisah CRLF
       benar, dan boundary dipakai apa adanya (CWG-02, CWG-N06).
 
@@ -1308,6 +1308,101 @@ Kriteria terima:
 
 Risiko: kesalahan CRLF membuat klien MJPEG berhenti membaca part.
 Mitigasi: test memeriksa urutan CRLF; verifikasi klien nyata masuk MANUAL-VERIFY.
+
+### Log WP-09 (Executor)
+
+Berkas berubah (2, sesuai daftar WP): `stream/MultipartWriter.kt` (baru),
+`app/src/test/.../stream/MultipartWriterTest.kt` (baru).
+
+Checklist:
+
+- [x] T-020 `partHeader(packet, boundary)` menghasilkan blok header berisi
+      `Content-Type: image/jpeg`, `Content-Length`, `X-Frame-Seq`,
+      `X-Frame-Captured-At-Ms`, `X-Frame-Width`, `X-Frame-Height`, diakhiri
+      CRLF ganda. Header dikodekan `US_ASCII` karena hanya berisi ASCII.
+- [x] T-021 `part(packet, boundary)` = header + JPEG + CRLF penutup, disusun
+      dalam satu alokasi `ByteArray` dengan `System.arraycopy`. JPEG disalin
+      satu kali; tidak ada `ByteArrayOutputStream` dan tidak ada enkode ulang.
+- [x] T-022 Tujuh kasus test: enam header wajib ada, header diawali boundary
+      dan diakhiri CRLF ganda, `Content-Length` sama dengan `jpeg.size`,
+      boundary dipakai apa adanya untuk nama lain, `part` menggabungkan header
+      + JPEG + CRLF penutup dengan offset benar, `seq`/dimensi berubah hanya
+      mengubah header, dan `capturedAtMs = 0` tetap ditulis.
+
+Output pemeriksaan (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "...MultipartWriterTest"
+  -> exit 0, tests="7" skipped="0" failures="0"
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+```
+
+Mutasi wajib dari kriteria terima (hapus `X-Frame-Width`):
+
+```text
+sed -i '/X-Frame-Width/d' MultipartWriter.kt
+  -> exit 1, MultipartWriterTest > enamHeaderWajibAda FAILED
+  -> MultipartWriterTest > seqBerubahMengubahHeaderTanpaMenyentuhJpeg FAILED
+berkas dikembalikan; grep -c "X-Frame-Width" -> 1
+```
+
+Contoh header tercetak (CRLF ditulis `<CRLF>`):
+
+```text
+--cwg<CRLF>
+Content-Type: image/jpeg<CRLF>
+Content-Length: 5<CRLF>
+X-Frame-Seq: 7<CRLF>
+X-Frame-Captured-At-Ms: 1700000000000<CRLF>
+X-Frame-Width: 1280<CRLF>
+X-Frame-Height: 720<CRLF>
+<CRLF>
+```
+
+Contoh di atas dihasilkan dari test sementara yang mencetak header ke berkas.
+Test sementara itu sudah dihapus dan tidak ikut commit; `git status` sebelum
+commit hanya memuat dua berkas WP.
+
+Kriteria terima terpenuhi: tujuh kasus lulus (lebih dari lima asersi), mutasi
+`X-Frame-Width` menggagalkan test, contoh header tercatat.
+
+Deviasi: tidak ada. Dua berkas, satu WP.
+
+Keterbatasan:
+
+- Batas part tidak dipotong ke panjang baris tertentu dan tidak diberi tanda
+  kutip. Boundary yang dipakai server aman karena hanya berisi huruf dan tanda
+  hubung, tetapi karakter aneh pada boundary tidak ditolak. Boundary berasal
+  dari konstanta server (WP-12), bukan masukan pengguna.
+- Kecocokan klien nyata (VLC, browser, backend) belum diuji; masuk MANUAL-VERIFY.
+
+### Log WP-09 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc` sampai QC independen
+memutuskan `done`.
+
+- `./gradlew testDebugUnitTest --tests "...MultipartWriterTest"` → exit `0`,
+  `tests="7" skipped="0" failures="0"`.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Mutasi diulang QC sendiri: menghapus baris `X-Frame-Width` menggagalkan dua
+  test; berkas dikembalikan dan `grep -c "X-Frame-Width"` bernilai `1`.
+- Isi berkas diperiksa: urutan penulisan header (`--boundary` lebih dulu),
+  CRLF ganda hanya di akhir blok header, dan `part` memakai offset
+  `header.size`/`header.size + body.size` yang sama dengan panjang total.
+- `grep -c "compressToJpeg" MultipartWriter.kt` → `0`, jadi tidak ada enkode
+  ulang pada jalur penulisan part.
+
+Temuan (note, tidak menahan):
+
+- QC-29: `part` menggandakan ukuran JPEG di memori selama proses tulis
+  (satu salinan header + JPEG). Untuk 1280x720 kualitas 80 salinan ini masih
+  wajar, tetapi jalur server (WP-12) sebaiknya menulis header dan JPEG
+  terpisah agar tidak ada salinan tambahan per frame. Dicatat untuk WP-12.
+
+Dampak ke WP berikutnya: WP-12 dapat menulis `partHeader` lalu `packet.jpeg`
+langsung ke keluaran, memakai temuan QC-29 sebagai panduan.
 
 ---
 
