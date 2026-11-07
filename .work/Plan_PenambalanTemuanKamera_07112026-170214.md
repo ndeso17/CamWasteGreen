@@ -457,9 +457,10 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-03 — Hapus endpoint `/audio` dan `/mic/toggle`
 
-Status: qc
+Status: rework
 
-File: `app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`
+File: `app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`,
+`README.md`
 
 Dependensi: WP-01.
 
@@ -467,10 +468,17 @@ Tugas:
 - [x] T-006 Hapus cabang rute `/audio` dan `/mic/toggle`, fungsi
       `audioInputStream()`, serta field `mic` pada respons `/status` (CWG-14).
 - [x] T-007 Pastikan server tidak lagi merujuk `MicManager` (CWG-14).
+- [ ] T-086 Perbarui baris audio pada tabel "Keadaan saat ini" di `README.md`
+      agar akurat: `/mic/toggle` sudah dihapus, sementara `MicManager`, tombol
+      mikrofon, dan izin `RECORD_AUDIO` masih ada sampai WP-04/WP-05 (CWG-N06;
+      temuan QC-13 WP-03). `README.md` ditambahkan ke `File:` oleh amendemen
+      Planner, bukan oleh Executor.
 
 Kriteria terima:
 - `grep -n "audio\|mic" app/src/main/java/dev/ndeso17/camwastegreen/MjpegHttpServer.kt`
   tidak menemukan rute maupun rujukan `MicManager`.
+- `grep -rn "mic/toggle" app/src` kosong, dan `README.md` hanya menyebut
+  endpoint itu sebagai sudah dihapus.
 - `./gradlew assembleDebug` lulus.
 - Bukti: keluaran grep dan ringkasan build pada Log WP.
 
@@ -520,6 +528,49 @@ Keterbatasan:
   sampai WP-04 dan WP-05. Build tetap hijau karena kelasnya belum dihapus.
 - `/` masih memakai judul "Android IP Cam" dari upstream; penggantian halaman
   diagnostik berada pada WP-12.
+
+### Log WP-03 (QC)
+
+Verdict: **FAIL**. Laporan: `.work/evidence/QC-WP-03.md`. Commit diperiksa:
+`12cdbf1`.
+
+Kriteria kode terpenuhi dan dibuktikan ulang oleh QC:
+
+- `grep -n '"/' MjpegHttpServer.kt` → hanya `/`, `/video`, `/status`.
+- `grep -n "MicManager\|audio\|mic\|Mic" MjpegHttpServer.kt` → `NONE`.
+- `grep -rn "mic/toggle" app/src` → 0 hasil.
+- `/status` memuat `streaming`, `fps`, `quality`, `clients`; field `mic` hilang.
+- Anti-ghost: `audioInputStream`/`mic/toggle` pada berkas itu 3 kemunculan pada
+  `1a76cf4` menjadi 0 pada `12cdbf1`.
+- `./gradlew assembleDebug` → `BUILD SUCCESSFUL in 6s` (dijalankan ulang QC).
+- `./gradlew lintDebug` → `BUILD FAILED`, 1 error `MicManager.kt:54` + 111
+  warning, identik baseline; bukan regresi dan bukan lingkup WP-03.
+
+Temuan yang menjatuhkan verdict:
+
+- QC-13 (blocker dokumentasi): `README.md:26` masih menyatakan endpoint
+  `/mic/toggle` "masih ada", padahal commit ini menghapusnya. Baris itu harus
+  dipecah: endpoint sudah dihapus, `MicManager`/tombol/`RECORD_AUDIO` masih ada
+  sampai WP-04/WP-05.
+
+Temuan note: QC-14 (`AGENTS.md:44,67` masih menyebut `/mic/toggle`; sudah
+tercakup `T-077` WP-29), QC-15 (lint error lama di `MicManager.kt`), QC-16
+(verifikasi `404` masih `MANUAL-VERIFY`).
+
+Rework:
+
+- [ ] REWORK-R1 Perbarui baris audio tabel "Keadaan saat ini" di `README.md`
+      agar `/mic/toggle` tercatat sudah dihapus, sedangkan `MicManager`, tombol
+      mikrofon, dan `RECORD_AUDIO` masih ada sampai WP-04/WP-05.
+      Uji: `grep -n "mic/toggle" README.md` hanya menyatakan "sudah dihapus";
+      `grep -rn "mic/toggle" app/src` tetap 0.
+- [ ] REWORK-R2 Buktikan tanpa regresi: `./gradlew assembleDebug` lulus dan
+      `grep -n "audio\|mic" MjpegHttpServer.kt` tetap kosong.
+
+Amendemen Planner: `README.md` ditambahkan ke `File:` WP-03 dan tugas `T-086`
+ditulis, karena rework ini menyentuh berkas di luar daftar awal.
+
+Tidak di-push karena verdict FAIL.
 
 ---
 
