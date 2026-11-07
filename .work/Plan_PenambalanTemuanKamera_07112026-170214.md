@@ -3609,19 +3609,19 @@ Status dicatat `qc`.
 
 ## WP-34 — Simpan pilihan interface dan kunci saat streaming
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefs.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefsTest.kt` (baru)
 
 Dependensi: WP-33.
 
 Tugas:
-- [ ] T-095 Buat `parseChoice(raw: String?): NetworkChoice` murni dengan default
+- [x] T-095 Buat `parseChoice(raw: String?): NetworkChoice` murni dengan default
       `ALL` untuk nilai kosong atau tidak dikenal, dan `serialize(choice): String`.
-- [ ] T-096 Buat pembungkus tipis `StreamInterfacePrefs` di atas
+- [x] T-096 Buat pembungkus tipis `StreamInterfacePrefs` di atas
       `SharedPreferences` bernama `stream_settings` dengan kunci
       `interface_choice`, memakai `parseChoice`/`serialize`.
-- [ ] T-097 Unit test: `parseChoice(null)`, nilai kosong, nilai tidak dikenal,
+- [x] T-097 Unit test: `parseChoice(null)`, nilai kosong, nilai tidak dikenal,
       dan setiap nilai sah; round-trip `serialize`→`parseChoice` untuk tiga
       pilihan.
 
@@ -3637,6 +3637,82 @@ Risiko: preferensi tersimpan sebagai nilai yang tidak lagi dikenal setelah
 pilihan dihapus.
 Mitigasi: `parseChoice` mengembalikan `ALL` untuk nilai tidak dikenal, dan
 default yang sama dipakai saat kunci belum ada.
+
+### Log WP-34 (Executor)
+
+Berkas baru (2): `stream/StreamInterfacePrefs.kt` dan
+`test/.../stream/StreamInterfacePrefsTest.kt`.
+
+Checklist:
+
+- [x] T-095 `StreamInterfaceChoice.parseChoice(raw)` dan
+      `serialize(choice)` dibuat sebagai `object` murni. `null`, string
+      kosong, spasi saja, dan nilai tak dikenal semuanya menghasilkan
+      `NetworkChoice.ALL`. Pencocokan memakai `storageValue`, bukan
+      `enum.name`, dan nilai di-trim lebih dulu.
+- [x] T-096 `StreamInterfacePrefs` membungkus `SharedPreferences` bernama
+      `stream_settings` dengan kunci `interface_choice`, memakai
+      `parseChoice`/`serialize` untuk membaca dan menulis.
+- [x] T-097 Unit test berisi 7 kasus.
+
+Satu koreksi yang dikerjakan sendiri selama WP ini: komentar KDoc semula
+menulis `android.*` sebagai prosa. Itu membuat kriteria grep literal
+(`grep -n "android\."`) tidak bisa membedakan prosa dari impor, sehingga
+penilaian kriteria menjadi kabur. Kalimatnya diubah agar hanya impor
+`android.content` yang muncul; jumlah impor tetap dua dan hanya ada di
+pembungkus.
+
+`UseKtx`: versi pertama memakai `prefs.edit().putString(...).apply()`, dan lint
+menaikkan warning 63 → 64. Diubah ke `prefs.edit { }` dari `androidx.core`,
+warning kembali 63. Perubahan ini dicatat supaya kenaikan angka tidak
+disalahartikan sebagai regresi.
+
+Output pemeriksaan kriteria (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "...StreamInterfacePrefsTest"
+  -> BUILD SUCCESSFUL, exit 0
+  -> TEST-...StreamInterfacePrefsTest.xml: tests="7" skipped="0" failures="0" errors="0"
+
+grep -n "android\." stream/StreamInterfacePrefs.kt
+  3:import android.content.Context
+  4:import android.content.SharedPreferences
+  11: * pembungkus itu yang mengimpor `android.content`.
+  -> dua impor, keduanya pada pembungkus; parseChoice sendiri tanpa android.*
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+lint: 0 error, 63 warning; tidak ada isu yang menunjuk StreamInterfacePrefs
+```
+
+Kasus yang teruji (nama test):
+
+```text
+parseChoice null menghasilkan ALL
+parseChoice string kosong dan spasi menghasilkan ALL
+parseChoice nilai tidak dikenal menghasilkan ALL
+parseChoice mengenali setiap nilai sah
+round trip serialize lalu parseChoice untuk tiga pilihan
+serialize memakai nilai penyimpanan bukan nama enum
+nilai tersimpan di sekitar spasi tetap dikenali
+```
+
+Keterbatasan:
+
+- `StreamInterfacePrefs` sendiri **tidak** diuji: `SharedPreferences` butuh
+  `Context`, dan proyek menolak Robolectric. Yang diuji adalah semua logika
+  yang menentukan nilai tersimpan. Pembungkusnya hanya dua baris panggilan.
+- Pilihan ini belum berpengaruh pada server. Penyimpanan baru dibaca pada
+  WP-35, dan di sana perilakunya baru terbukti di perangkat.
+
+### Log WP-34 (QC)
+
+Verdict: **PASS**, diperiksa sendiri oleh Executor; belum ada QC independen.
+Status dicatat `qc`.
+
+- 7 kasus uji lulus, melebihi syarat minimal lima.
+- Kriteria grep terpenuhi dan dibedakan antara impor pembungkus dan logika
+  parsing.
+- Gerbang lulus `exit 0`; warning kembali ke 63 setelah `UseKtx` diperbaiki.
 
 ---
 
