@@ -1163,20 +1163,20 @@ langsung sebagai dimensi `FramePacket`.
 
 ## WP-08 — `FramePacket` dan `FrameSource` dengan nomor urut serta waktu tangkap
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/FramePacket.kt` (baru), `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameSource.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/FrameSourceTest.kt` (baru)
 
 Dependensi: WP-07.
 
 Tugas:
-- [ ] T-017 Buat `FramePacket(seq: Long, capturedAtMs: Long, width: Int, height: Int, jpeg: ByteArray)`
+- [x] T-017 Buat `FramePacket(seq: Long, capturedAtMs: Long, width: Int, height: Int, jpeg: ByteArray)`
       sebagai data class murni (CWG-02, CWG-N04).
-- [ ] T-018 Buat `FrameSource` dengan `publish(jpeg, width, height, capturedAtMs): FramePacket`,
+- [x] T-018 Buat `FrameSource` dengan `publish(jpeg, width, height, capturedAtMs): FramePacket`,
       penghitung `seq` monoton yang dimulai dari 1, dan `latest: FramePacket?`;
       waktu tangkap berasal dari pemanggil, bukan dari jam di dalam `FrameSource`
       (CWG-02, CWG-03).
-- [ ] T-019 Unit test: `seq` naik satu tiap `publish`, `latest` menunjuk paket
+- [x] T-019 Unit test: `seq` naik satu tiap `publish`, `latest` menunjuk paket
       terakhir, `lastFrameAtMs` mengikuti `capturedAtMs`, dan `publish` dari dua
       thread tidak menghasilkan `seq` duplikat (CWG-03, CWG-N04).
 
@@ -1189,6 +1189,94 @@ Kriteria terima:
 Risiko: `seq` melompat karena race antar thread analyzer.
 Mitigasi: sinkronisasi pada `publish`; test dua thread wajib ada dan harus
 gagal bila sinkronisasi dihapus.
+
+### Log WP-08 (Executor)
+
+Berkas berubah (3, sesuai daftar WP): `stream/FramePacket.kt` (baru),
+`stream/FrameSource.kt` (baru), `app/src/test/.../stream/FrameSourceTest.kt` (baru).
+
+Checklist:
+
+- [x] T-017 `FramePacket(seq, capturedAtMs, width, height, jpeg)` data class
+      murni tanpa `android.*`.
+- [x] T-018 `FrameSource.publish(jpeg, width, height, capturedAtMs)` memberi
+      nomor urut mulai dari 1 dan monoton, menyimpan `latest`, `lastSeq`,
+      `lastFrameAtMs`. Jam tidak dibaca di dalam kelas: waktu tangkap selalu
+      dari pemanggil. `publish` diberi `@Synchronized`; `latest` `@Volatile`.
+- [x] T-019 Delapan kasus test: `seq` naik satu tiap publish, `latest` menunjuk
+      paket terakhir, `lastFrameAtMs` mengikuti `capturedAtMs`, belum ada frame
+      berarti `null`, publish dari 8 thread × 2000 iterasi tidak menghasilkan
+      `seq` duplikat, 1000 publish berurutan tidak mengulang `seq`, dimensi
+      tidak sah ditolak, `clear` tidak mengulang nomor urut.
+
+Output pemeriksaan (mentah):
+
+```text
+./gradlew testDebugUnitTest --tests "...FrameSourceTest"  -> BUILD SUCCESSFUL, exit 0
+tests="8" skipped="0" failures="0"
+grep -c "import android\|System.currentTimeMillis" FrameSource.kt FramePacket.kt -> 0, 0
+./gradlew assembleDebug testDebugUnitTest lintDebug       -> BUILD SUCCESSFUL, exit 0
+```
+
+Bukti mutasi (mutasi harus menggagalkan test):
+
+```text
+hapus "@Synchronized" pada publish, jalankan test
+  percobaan 1 -> exit 1 (gagal)
+  percobaan 2 -> exit 1 (gagal)
+  percobaan 3 -> exit 1 (gagal)
+berkas dikembalikan; test kembali lulus
+```
+
+Catatan proses: mutasi pertama memakai 2 thread × 500 iterasi dan **tidak**
+menggagalkan test, jadi bukti tersebut tidak sah. Beban dinaikkan ke
+8 thread × 2000 iterasi; setelah itu mutasi gagal tiga kali berturut-turut.
+Berkas yang dimutasi dikembalikan dari salinan, diverifikasi `grep
+"@Synchronized"` masih menemukan dua pemakaian.
+
+Kriteria terima terpenuhi: delapan kasus lulus termasuk kasus banyak thread,
+tidak ada `android.*` maupun jam internal.
+
+Deviasi: `FrameSource` menambah `clear()` dan `lastSeq` di luar daftar tugas.
+Alasan: `clear()` dibutuhkan saat kamera berhenti agar `/status` tidak
+melaporkan frame lama sebagai frame terakhir; `lastSeq` dipakai WP-10 dan
+WP-11. Keduanya tidak menambah dependensi baru.
+
+Keterbatasan:
+
+- `publish` menolak dimensi tidak sah dengan exception; pemanggil di jalur
+  sensor harus memastikan dimensi positif (dicek WP-07).
+- Bukti keunikan `seq` berasal dari JVM laptop, bukan perangkat target.
+  Perilaku thread di ART pada perangkat masuk MANUAL-VERIFY.
+
+### Log WP-08 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc` sampai QC independen
+memutuskan `done`.
+
+- `./gradlew testDebugUnitTest --tests "...FrameSourceTest"` → `BUILD
+  SUCCESSFUL`, exit `0`; `tests="8" skipped="0" failures="0"` (dijalankan QC
+  sendiri).
+- `grep -c "import android\|System.currentTimeMillis"` → `0` untuk
+  `FrameSource.kt` dan `FramePacket.kt`.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0`.
+- Isi berkas diperiksa, bukan hanya grep: `seq` dimulai dari 1
+  (`nextSeq = 1L`), `publish` mengembalikan paket yang sama dengan yang
+  disimpan, `latest`/`lastSeq`/`lastFrameAtMs` membaca satu sumber state.
+- Bukti mutasi diulang QC sendiri: tanpa `@Synchronized` test gagal (3 dari 3
+  percobaan), dengan `@Synchronized` lulus.
+
+Temuan (note, tidak menahan):
+
+- QC-28: `FrameSource.publish` melempar `IllegalArgumentException` untuk
+  dimensi tidak sah. Kalau analyzer suatu saat memanggil dengan dimensi 0,
+  exception akan menggagalkan frame. Saat ini pemanggil belum ada
+  (WP-14), jadi cukup dicatat; WP-14 sebaiknya memvalidasi lebih dulu.
+
+Dampak ke WP berikutnya: WP-09 dapat memakai `FramePacket` apa adanya; WP-10
+dan WP-11 dapat memakai `FrameSource.latest` serta `lastSeq`.
 
 ---
 
