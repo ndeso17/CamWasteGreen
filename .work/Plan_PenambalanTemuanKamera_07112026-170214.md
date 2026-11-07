@@ -629,20 +629,25 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-04 — Hapus kontrol mikrofon dan equalizer dari UI
 
-Status: todo
+Status: qc
 
-File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`
+File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`,
+`app/src/main/res/layout/activity_main.xml`, `README.md`
 
 Dependensi: WP-03.
 
 Tugas:
-- [ ] T-008 Hapus field `btnMicToggle` dan `equalizerView`, listener mikrofon,
+- [x] T-008 Hapus field `btnMicToggle` dan `equalizerView`, listener mikrofon,
       serta pemanggilan `MicManager.toggle()`, `MicManager.stop()`, dan
       `setActive(...)` (CWG-14).
-- [ ] T-009 Hapus `RECORD_AUDIO` dari `REQUIRED_PERMISSIONS` sehingga hanya
+- [x] T-009 Hapus `RECORD_AUDIO` dari `REQUIRED_PERMISSIONS` sehingga hanya
       `CAMERA` yang diminta (CWG-14).
-- [ ] T-010 Hapus view tombol mikrofon dan `EqualizerView` dari
+- [x] T-010 Hapus view tombol mikrofon dan `EqualizerView` dari
       `activity_main.xml` (CWG-14).
+- [x] T-087 Perbarui baris audio tabel "Keadaan saat ini" di `README.md`:
+      tombol mikrofon di UI sudah dihapus, `MicManager` dan izin `RECORD_AUDIO`
+      masih ada sampai WP-05 (CWG-N06; temuan QC-17 WP-03). `README.md`
+      ditambahkan ke `File:` WP-04 oleh amendemen Planner.
 
 Kriteria terima:
 - `grep -rn "MicManager\|EqualizerView\|RECORD_AUDIO" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt app/src/main/res/layout/activity_main.xml`
@@ -655,6 +660,65 @@ Kriteria terima:
 Risiko: penghapusan view menggeser tata letak panel kontrol.
 Mitigasi: build dan inspeksi layout XML; uji tampilan perangkat masuk
 MANUAL-VERIFY.
+
+### Log WP-04 (Executor)
+
+Berkas berubah (3, sesuai daftar WP termasuk amendemen Planner):
+`app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`,
+`app/src/main/res/layout/activity_main.xml`, `README.md`.
+
+Checklist:
+
+- [x] T-008 `MainActivity.kt` bersih dari audio/equalizer: field
+      `equalizerView` dan `btnMicToggle` dihapus, `findViewById` keduanya
+      dihapus, listener `btnMicToggle.setOnClickListener` (4 baris) dihapus,
+      `equalizerView.setActive(...)` di `updateUI()` dihapus,
+      `btnMicToggle.isEnabled` dan `btnMicToggle.setImageResource(...)` dengan
+      `R.drawable.ic_mic`/`ic_mic_off` dihapus, dan `MicManager.stop()` di
+      `onDestroy()` dihapus. Diff: +1/-17 baris.
+- [x] T-009 `REQUIRED_PERMISSIONS` sekarang `arrayOf(Manifest.permission.CAMERA)`.
+- [x] T-010 `activity_main.xml`: `ImageButton btnMicToggle` (9 baris) dan blok
+      `dev.ndeso17.camwastegreen.EqualizerView` (7 baris, termasuk komentar
+      "Right equalizer") dihapus. Jumlah `@+id/` **25 sebelum, 23 sesudah** —
+      berkurang tepat dua.
+- [x] T-087 `README.md:26` sekarang berbunyi: "Endpoint `/mic/toggle`, rute
+      `/audio`, dan tombol mikrofon di UI **sudah dihapus**. `MicManager` dan
+      izin `RECORD_AUDIO` masih ada", kolom "Ditutup oleh" = `WP-05`.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "MicManager\|EqualizerView\|equalizerView\|btnMicToggle\|RECORD_AUDIO\|ic_mic" MainActivity.kt
+  -> NONE
+grep -n "btnMicToggle\|EqualizerView\|ic_mic" activity_main.xml
+  -> NONE
+grep -c "@+id/" activity_main.xml  -> 23 (sebelum 25)
+./gradlew assembleDebug testDebugUnitTest -> BUILD SUCCESSFUL in 28s
+./gradlew lintDebug  -> BUILD FAILED; 1 error MicManager.kt:54 MissingPermission,
+                        112 warning (baseline 111)
+```
+
+Kriteria terima terpenuhi: grep gabungan pada dua berkas kosong,
+`assembleDebug` lulus, jumlah `@+id/` turun tepat dua.
+
+Deviasi: tidak ada. Satu berkas tambahan (`README.md`) masuk daftar `File:`
+melalui amendemen Planner `T-087`, bukan ditambahkan sendiri oleh Executor.
+
+Keterbatasan:
+
+- `MicManager.kt` dan `EqualizerView.kt` masih ada sebagai berkas; keduanya
+  dihapus pada WP-05. Build hijau karena tidak ada lagi pemanggil.
+- Lint masih gagal 1 error lama di `MicManager.kt:54`, ditutup WP-05. WP ini
+  tidak mengklaim lint bersih.
+- Jumlah warning naik 111 → 112 meski ada dua warning baru
+  `UnusedResources` (`ic_mic.xml`, `ic_mic_off.xml`) karena satu warning
+  `HardcodedText` `"Mic"` pada layout hilang bersama view-nya. Kedua drawable
+  itu dihapus pada WP-05 sehingga warning `UnusedResources` ikut hilang.
+  Rincian ini dicatat supaya kenaikan angka tidak disalahartikan sebagai
+  regresi mutu.
+- Tata letak panel kontrol berubah: tombol kamera dan kunci orientasi kini
+  rata kiri tanpa tombol mikrofon di depannya, dan sisi kanan baris peek
+  kosong. Tampilan belum diperiksa pada perangkat; masuk MANUAL-VERIFY.
 
 ---
 

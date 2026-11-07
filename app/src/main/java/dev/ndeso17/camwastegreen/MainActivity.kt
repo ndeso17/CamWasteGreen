@@ -39,14 +39,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvQualityValue: TextView
     private lateinit var btnRecordBg: View
     private lateinit var btnRecordInner: View
-    private lateinit var equalizerView: EqualizerView
     private lateinit var btnIncreaseFps: Button
     private lateinit var btnDecreaseFps: Button
     private lateinit var btnIncreaseQuality: Button
     private lateinit var btnDecreaseQuality: Button
     private lateinit var btnMinimize: ImageButton
     private lateinit var btnSwitchCamera: ImageButton
-    private lateinit var btnMicToggle: ImageButton
     private lateinit var btnOrientationLock: ImageButton
     private lateinit var tvUsbStatus: TextView
     private lateinit var controlPanel: LinearLayout
@@ -78,7 +76,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "IPCam.MainActivity"
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,14 +107,12 @@ class MainActivity : AppCompatActivity() {
         tvQualityValue = findViewById(R.id.tvQualityValue)
         btnRecordBg = findViewById(R.id.btnRecordBg)
         btnRecordInner = findViewById(R.id.btnRecordInner)
-        equalizerView = findViewById(R.id.equalizerView)
         btnIncreaseFps = findViewById(R.id.btnIncreaseFps)
         btnDecreaseFps = findViewById(R.id.btnDecreaseFps)
         btnIncreaseQuality = findViewById(R.id.btnIncreaseQuality)
         btnDecreaseQuality = findViewById(R.id.btnDecreaseQuality)
         btnMinimize = findViewById(R.id.btnTogglePanel)
         controlPanel = findViewById(R.id.controlPanel)
-        btnMicToggle = findViewById(R.id.btnMicToggle)
         btnSwitchCamera = findViewById(R.id.btnSwitchCamera)
         btnOrientationLock = findViewById(R.id.btnOrientationLock)
         tvUsbStatus = findViewById(R.id.tvUsbStatus)
@@ -259,12 +255,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnMicToggle.setOnClickListener {
-            MicManager.toggle()
-            equalizerView.setActive(MicManager.isActive)
-            updateUI()
-        }
-
         btnOrientationLock.setOnClickListener {
             isOrientationLocked = !isOrientationLocked
             if (isOrientationLocked) {
@@ -317,18 +307,13 @@ class MainActivity : AppCompatActivity() {
             if (isStreaming) R.drawable.bg_btn_record_on else R.drawable.bg_btn_record_off
         )
         btnRecordInner.visibility = if (isStreaming) View.GONE else View.VISIBLE
-        equalizerView.setActive(isStreaming && MicManager.isActive)
 
         btnIncreaseFps.isEnabled = isStreaming
         btnDecreaseFps.isEnabled = isStreaming
         btnIncreaseQuality.isEnabled = isStreaming
         btnDecreaseQuality.isEnabled = isStreaming
         btnSwitchCamera.isEnabled = true
-        btnMicToggle.isEnabled = true
 
-        btnMicToggle.setImageResource(
-            if (MicManager.isActive) R.drawable.ic_mic else R.drawable.ic_mic_off
-        )
         btnOrientationLock.setImageResource(
             if (isOrientationLocked) R.drawable.ic_rotate_locked else R.drawable.ic_rotate
         )
@@ -481,7 +466,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopCamera()
-        MicManager.stop()
         MJPEGServerInstance.stop()
         FilterPipeline.shutdown()
         cameraExecutor.shutdown()

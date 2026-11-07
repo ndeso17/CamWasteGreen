@@ -118,16 +118,6 @@
                 android:gravity="center_vertical">
 
                 <ImageButton
-                    android:id="@+id/btnMicToggle"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_btn_secondary"
-                    android:src="@drawable/ic_mic"
-                    android:contentDescription="Mic"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
-                <ImageButton
                     android:id="@+id/btnSwitchCamera"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
@@ -171,13 +161,6 @@
                     android:visibility="gone" />
             </FrameLayout>
 
-            <!-- Right equalizer -->
-            <dev.ndeso17.camwastegreen.EqualizerView
-                android:id="@+id/equalizerView"
-                android:layout_width="60dp"
-                android:layout_height="32dp"
-                android:layout_gravity="end|center_vertical"
-                android:visibility="invisible" />
         </FrameLayout>
 
         <!-- Expanded controls -->
