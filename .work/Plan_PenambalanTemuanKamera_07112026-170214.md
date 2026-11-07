@@ -1625,7 +1625,7 @@ menunggu perangkat dan ambang B-06.
 
 ## WP-32 — Rapikan `README.md`: hapus tabel keadaan yang cepat basi
 
-Status: todo
+Status: qc
 
 File: `README.md`
 
@@ -1639,14 +1639,14 @@ dan tabel tidak pernah menyatakan keadaan yang sudah basi dalam jangka waktu
 panjang.
 
 Tugas:
-- [ ] T-088 Hapus bagian "Keadaan saat ini" beserta tabelnya dari
+- [x] T-088 Hapus bagian "Keadaan saat ini" beserta tabelnya dari
       `README.md` (CWG-N06).
-- [ ] T-089 Ganti dengan pointer yang tidak cepat basi: rujukan ke
+- [x] T-089 Ganti dengan pointer yang tidak cepat basi: rujukan ke
       `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` sebagai sumber
       status per work package, dan ke `.work/AGENTS.md` repo untuk struktur
       serta daftar defek. Jangan menulis daftar status yang disalin manual
       (CWG-N06).
-- [ ] T-090 Pastikan tidak ada klaim bentuk sekarang yang tersisa tentang
+- [x] T-090 Pastikan tidak ada klaim bentuk sekarang yang tersisa tentang
       ML Kit, filter, audio, kamera terikat Activity, `/status`, token, atau
       jalur H.264 sebagai "sudah tidak ada" maupun "masih ada" (CWG-N02,
       CWG-N06).
@@ -1663,6 +1663,52 @@ Risiko: pembaca kehilangan ringkasan keadaan sekarang yang mudah dilihat.
 Mitigasi: pointer ke PLAN dan `AGENTS.md` memberi sumber yang sama tetapi
 selalu mutakhir; ringkasan manual justru sumber kesalahan berulang
 (temuan QC-06..QC-08, QC-13, QC-17, QC-20).
+
+### Log WP-32 (Executor)
+
+Berkas berubah (1, sesuai daftar WP): `README.md`.
+
+Checklist:
+
+- [x] T-088 Bagian "Keadaan saat ini" beserta tabel tujuh barisnya dihapus
+      seluruhnya, termasuk kolom "Ditutup oleh" yang memuat nomor WP.
+- [x] T-089 Diganti bagian "Keadaan pekerjaan" yang menunjuk dua sumber
+      status: `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` (status
+      per WP dan Log) dan `AGENTS.md` (struktur dan daftar defek), disertai
+      kalimat "Jangan menyimpulkan kemampuan aplikasi dari `README.md` ini
+      saja". Tabel "Dokumen" juga ditambah baris PLAN.
+- [x] T-090 Bagian "Asal kode dan atribusi" tidak lagi merujuk "Keadaan
+      saat ini"; frasa "**direncanakan keluar**" diganti "ditujukan keluar
+      dari jalur operasi" dengan rujukan ke PLAN. Bagian "Status pengembangan"
+      tidak lagi mengulang butir-butir yang sama dengan tabel lama (kamera
+      terikat Activity, `/status` konfigurasi, stream tanpa token), dan kini
+      berbunyi "Baca PLAN untuk tahu WP mana yang sudah selesai".
+
+Output pemeriksaan (mentah):
+
+```text
+grep -n "Keadaan saat ini" README.md                -> tanpa hasil
+grep -nE "MicManager|FilterPipeline|StreamEncoder|TcpStreamServer|bindToLifecycle|RECORD_AUDIO|AiProcessor|/mic/toggle" README.md
+                                                    -> tanpa hasil
+grep -n "Plan_PenambalanTemuanKamera" README.md    -> baris 23, 42, 68
+./gradlew assembleDebug                            -> BUILD SUCCESSFUL in 8s
+pemindaian non-ASCII README.md                     -> 0 baris bermasalah
+```
+
+Kriteria terima terpenuhi: tidak ada "Keadaan saat ini", tidak ada simbol
+volatil yang disebut sebagai ada atau tidak ada, rujukan PLAN ada, build lulus.
+
+Deviasi: tidak ada. Satu berkas, satu WP.
+
+Keterbatasan:
+
+- README kini tidak memberi ringkasan status dalam berkas sendiri. Itu pilihan
+  sadar: ringkasan manual terbukti menjadi sumber kesalahan berulang
+  (QC-06..QC-08, QC-13, QC-17, QC-20).
+- Bagian "Batas peran" masih memakai bentuk target ("Peran yang dituju: ...").
+  Bentuk itu akan diubah menjadi pernyataan keadaan pada `T-085` WP-29 setelah
+  seluruh WP kode selesai.
+- Tidak ada klaim FPS, latensi, atau bandwidth yang ditambahkan.
 
 ---
 

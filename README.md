@@ -14,39 +14,33 @@ orkestrasi berada di backend; kendali aktuator berada di ESP32-S3. Peran yang
 dituju juga mengecualikan audio, mikrofon, filter visual, deteksi wajah, dan
 segmentasi selfie dari jalur sensor.
 
-## Keadaan saat ini
+## Keadaan pekerjaan
 
-Peran di atas adalah target, belum seluruhnya berlaku pada kode sekarang.
-Pada commit ini masih ada:
+Peran di atas adalah target. Status per work package, termasuk sisa jalur
+upstream yang belum ditutup, tidak dicatat di berkas ini karena akan cepat
+basi. Sumber status tunggal:
 
-| Sisa jalur upstream | Keadaan | Ditutup oleh |
-|---|---|---|
-| ML Kit face detection | `FilterPipeline.init` menyalakan `AiProcessor.isFaceDetectionEnabled`, dan `FilterPipeline.process` memanggil `AiProcessor.process` pada setiap frame | WP-13, WP-15, WP-16 |
-| Filter visual dan enkode ganda | Jalur sensor memanggil `FilterPipeline.process` yang melakukan `YuvImage.compressToJpeg` lalu `Bitmap.compress` | WP-13, WP-14, WP-15 |
-| Audio dan mikrofon | Endpoint `/mic/toggle`, rute `/audio`, dan tombol mikrofon di UI **sudah dihapus**. `MicManager` dan izin `RECORD_AUDIO` masih ada | WP-05 |
-| Kamera terikat Activity | `bindToLifecycle` dipanggil dari `MainActivity`; belum ada foreground service | WP-17, WP-18 |
-| Status belum terukur | `/status` melaporkan nilai konfigurasi, bukan pengukuran | WP-10, WP-12 |
-| Stream tanpa otorisasi | Tidak ada token; `usesCleartextTraffic=true` | WP-25, WP-26, WP-27 |
-| Jalur H.264 ganda | `StreamEncoder` dan `TcpStreamServer` masih ada | WP-31 |
+- `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` — daftar WP, status
+  `todo`/`wip`/`qc`/`rework`/`done`, dan Log tiap WP.
+- `AGENTS.md` — struktur berkas terkini dan daftar defek yang sudah atau belum
+  tertutup.
 
-Jangan menganggap tabel di atas sebagai daftar fitur. Isinya sisa pekerjaan.
+Jangan menyimpulkan kemampuan aplikasi dari `README.md` ini saja.
 
 ## Asal kode dan atribusi
 
 Repo ini adalah fork dari <https://github.com/ndeso17/ipcam>. Kode dasar
 diambil dan diubah untuk peran kamera sensor. Sebagian fitur demo upstream
-(audio, ML Kit, filter GPU, virtual camera driver, jembatan OBS) **direncanakan
-keluar** dari jalur operasi; lihat bagian "Keadaan saat ini" untuk sisa yang
-masih berjalan pada kode sekarang. Atribusi dan hak cipta kode asal tetap milik
-pemilik repo tersebut; lisensi repo ini dijelaskan pada [LICENSE](LICENSE).
+(audio, ML Kit, filter GPU, virtual camera driver, jembatan OBS) ditujukan
+keluar dari jalur operasi; status pekerjaan itu ada pada PLAN, bukan di berkas
+ini. Atribusi dan hak cipta kode asal tetap milik pemilik repo tersebut;
+lisensi repo ini dijelaskan pada [LICENSE](LICENSE).
 
 ## Status pengembangan
 
-Perbaikan temuan audit kamera 7 November 2026 sedang dikerjakan menurut
-`.work/Plan_PenambalanTemuanKamera_07112026-170214.md`. Selama work package
-tersebut belum selesai, sebagian perilaku masih seperti versi upstream:
-kamera terikat ke Activity, belum ada foreground service, `/status` masih
-melaporkan nilai konfigurasi, dan stream belum memakai token.
+Perbaikan temuan audit kamera 7 November 2026 dikerjakan sebagai work package
+menurut `.work/Plan_PenambalanTemuanKamera_07112026-170214.md`. Baca PLAN untuk
+tahu WP mana yang sudah selesai; `README.md` tidak mengulang daftar itu.
 
 Belum ada pengukuran FPS, latensi, atau bandwidth pada perangkat sasaran.
 Angka yang muncul di dokumen adalah default konfigurasi, bukan ambang mutu.
@@ -71,6 +65,7 @@ luar repo dan tidak boleh di-commit.
 | `.work/Architecture.md` | Komponen, kepemilikan state, alur frame |
 | `.work/Structure.md` | Struktur berkas dan tanggung jawab |
 | `.work/Rules.md` | Batas keras implementasi |
+| `.work/Plan_PenambalanTemuanKamera_07112026-170214.md` | Daftar work package, status, dan log pengerjaan |
 | `AGENTS.md` | Pengetahuan proyek untuk agen dan pengembang |
 
 ## Lisensi
