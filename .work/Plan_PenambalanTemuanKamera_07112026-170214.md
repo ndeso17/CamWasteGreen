@@ -273,7 +273,7 @@ dicatat di `../.work/FINDINGS.md`.
 
 ## WP-02 — Lisensi MIT dan atribusi fork
 
-Status: rework
+Status: done
 
 File: `LICENSE`, `README.md`
 
@@ -339,6 +339,41 @@ Keterbatasan:
   diperbarui pada WP-29 setelah WP-01..WP-31 selesai.
 - Tidak ada klaim mutu, FPS, atau latensi pada README.
 
+### Log WP-02 (Executor) — rework putaran 1
+
+Rework dari temuan QC-06..QC-08 (`FAIL`). Berkas berubah: `README.md` saja;
+`LICENSE` tidak disentuh.
+
+- [x] REWORK-R1 Klaim bentuk sekarang diganti menjadi pernyataan target.
+      Bagian "Batas peran" kini menyebut "Peran yang dituju: ..." dan
+      "Peran yang dituju juga mengecualikan audio, mikrofon, filter visual,
+      deteksi wajah, dan segmentasi selfie dari jalur sensor". Bagian baru
+      "Keadaan saat ini" (baris 17-32) memuat tabel sisa jalur upstream
+      beserta keadaan nyata dan WP penutupnya: ML Kit face detection per frame
+      (WP-13/15/16), filter visual dan enkode ganda (WP-13/14/15), audio dan
+      mikrofon termasuk `RECORD_AUDIO` (WP-03..05), kamera terikat Activity
+      (WP-17/18), status belum terukur (WP-10/12), stream tanpa otorisasi
+      (WP-25..27), dan jalur H.264 (WP-31). Bagian "Asal kode dan atribusi"
+      diubah menjadi "**direncanakan keluar** dari jalur operasi" dengan
+      rujukan ke "Keadaan saat ini".
+      Uji: `grep -n "Keadaan saat ini" README.md` → baris 17 dan 39.
+- [x] REWORK-R2 Kriteria WP tetap terpenuhi setelah perubahan:
+      `grep -c "ndeso17/ipcam" README.md` = 1;
+      `grep -c "MIT License" LICENSE` = 1;
+      `./gradlew assembleDebug --console=plain` → `BUILD SUCCESSFUL in 6s`.
+
+Verifikasi tambahan:
+
+- `grep -n "tidak menjalankan model ONNX\|Jalur sensor tidak memuat\|Audio dan mikrofon tidak dipakai" README.md`
+  hanya menemukan baris 10-11 yang kini berada di bawah frasa "Peran yang
+  dituju"; tidak ada klaim bentuk sekarang yang tersisa.
+- Pemindaian karakter non-ASCII pada `README.md` → 0 baris bermasalah.
+- Tidak ada angka FPS, latensi, atau bandwidth baru pada README.
+
+Keterbatasan: tabel "Keadaan saat ini" adalah potret commit ini dan wajib
+diperbarui pada WP-29 setelah WP-03..WP-31 selesai. Bila ada WP yang berubah
+urutan, rujukan WP pada tabel harus disesuaikan.
+
 ### Log WP-02 (QC)
 
 Verdict: **FAIL**. Laporan: `.work/evidence/QC-WP-02.md`. Commit diperiksa:
@@ -382,6 +417,41 @@ Rework:
       = 1, `./gradlew assembleDebug` lulus. Catat keluaran pada Log WP.
 
 `LICENSE` tidak perlu diubah. Tidak ada push karena verdict FAIL.
+
+### Log WP-02 (QC) — putaran 2
+
+Verdict: **PASS_WITH_NOTES**. Laporan: `.work/evidence/QC-WP-02.md` bagian
+"QC putaran 2".
+
+Rework dibuktikan:
+
+- REWORK-R1 selesai: `grep -n "^## Keadaan saat ini" README.md` → baris 17;
+  tiga klaim bentuk sekarang yang dilaporkan QC-06..QC-08 tidak lagi ada
+  (`grep -nE "^(Aplikasi \*\*tidak\*\*|Audio dan mikrofon tidak dipakai|Jalur sensor tidak memuat)" README.md`
+  → tanpa hasil); klaim kini berbentuk "Peran yang dituju: ..." dan bagian
+  atribusi memakai "**direncanakan keluar**".
+- REWORK-R2 selesai: `grep -c "ndeso17/ipcam" README.md` = 1;
+  `grep -c "MIT License" LICENSE` = 1; `grep -c 'THE SOFTWARE IS PROVIDED "AS IS"' LICENSE`
+  = 1; `./gradlew assembleDebug` → `BUILD SUCCESSFUL`.
+
+Tabel "Keadaan saat ini" diperiksa satu baris demi satu baris terhadap kode,
+bukan diterima dari Log Executor. Seluruh tujuh baris cocok dengan isi berkas
+pada commit ini (ML Kit aktif di `FilterPipeline.kt:44,66`; enkode ganda di
+`:62,91`; `object MicManager` + `/mic/toggle` di `MjpegHttpServer.kt:74` +
+`RECORD_AUDIO` di `AndroidManifest.xml:15`; `bindToLifecycle` di
+`MainActivity.kt:443`; `/status` memakai `currentFps` di `MjpegHttpServer.kt:67`;
+`X-Api-Key` = 0 dan `usesCleartextTraffic="true"` di `AndroidManifest.xml:30`;
+`StreamEncoder.kt`/`TcpStreamServer.kt` ada).
+
+QC-06, QC-07, QC-08 dinyatakan tertutup. Temuan baru hanya note:
+
+- QC-11: tabel "Keadaan saat ini" adalah potret commit ini dan harus
+  diperbarui setelah WP-03..WP-31 selesai. `README.md` belum tercantum pada
+  `File:` WP-29; Planner perlu menambahkannya saat re-plan.
+- QC-12: bagian "Status pengembangan" mengulang tiga butir dari tabel
+  (baris 43-51 vs 27-29); bukan kesalahan, tetapi menambah beban pemeliharaan.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 

@@ -97,3 +97,68 @@ dibuat ulang.
 
 Tidak ada push. Verdict FAIL, sehingga commit artefak QC dilakukan tetapi
 `main` tidak di-push sampai WP-02 `done`.
+
+---
+
+# QC putaran 2 — rework WP-02
+
+**QC date:** 7 November 2026
+**Commit yang diperiksa:** working tree setelah `b4db94a` (rework belum di-commit)
+**Verdict putaran 2: PASS_WITH_NOTES**
+
+## Rework dibuktikan
+
+| Rework | Perintah QC | Hasil |
+|---|---|---|
+| REWORK-R1 | `grep -n "^## Keadaan saat ini" README.md` | baris 17 — bagian ada sebagai heading sendiri |
+| REWORK-R1 | `sed -n '10,15p' README.md` | klaim kini berbentuk target: "Peran yang dituju: aplikasi tidak menjalankan inferensi ... Peran yang dituju juga mengecualikan audio, mikrofon, filter visual, deteksi wajah, dan segmentasi selfie" |
+| REWORK-R1 | `grep -nE "^(Aplikasi \*\*tidak\*\*\|Audio dan mikrofon tidak dipakai\|Jalur sensor tidak memuat)" README.md` | tanpa hasil — tiga klaim bentuk sekarang yang dilaporkan QC-06..QC-08 sudah hilang |
+| REWORK-R1 | `grep -n "direncanakan" README.md` | baris 38 — bagian atribusi memakai "**direncanakan keluar** dari jalur operasi" dengan rujukan ke "Keadaan saat ini" |
+| REWORK-R2 | `grep -c "ndeso17/ipcam" README.md` | 1 |
+| REWORK-R2 | `grep -c "MIT License" LICENSE` | 1 |
+| REWORK-R2 | `grep -c 'THE SOFTWARE IS PROVIDED "AS IS"' LICENSE` | 1 |
+| REWORK-R2 | `sed -n '3p' LICENSE` | `Copyright (c) 2026 ndeso17` |
+| REWORK-R2 | `./gradlew assembleDebug --console=plain` | `BUILD SUCCESSFUL` |
+
+## Tabel "Keadaan saat ini" diperiksa terhadap kode, bukan diterima
+
+Setiap baris tabel QC cocokkan dengan isi berkas pada commit ini:
+
+| Baris README | Klaim | Bukti kode | Cocok |
+|---|---|---|---|
+| ML Kit face detection | masih berjalan per frame | `pipeline/FilterPipeline.kt:44` `AiProcessor.isFaceDetectionEnabled = true`; `:66` `AiProcessor.process(...)`; `ai/AiProcessor.kt:11` `FaceDetector()` | ya |
+| Filter visual dan enkode ganda | `compressToJpeg` lalu `Bitmap.compress` | `pipeline/FilterPipeline.kt:62` dan `:91` | ya |
+| Audio dan mikrofon | `MicManager`, `/mic/toggle`, `RECORD_AUDIO` | `MicManager.kt:13` `object MicManager`; `MjpegHttpServer.kt:74`; `AndroidManifest.xml:15`; `MainActivity.kt:81` | ya |
+| Kamera terikat Activity | `bindToLifecycle` di `MainActivity` | `MainActivity.kt:443` | ya |
+| Status belum terukur | `/status` melaporkan konfigurasi | `MjpegHttpServer.kt:63-72` → `put("fps", currentFps)`, bukan pengukuran | ya |
+| Stream tanpa otorisasi | tanpa token, cleartext | `grep -c "X-Api-Key" MjpegHttpServer.kt` = 0; `AndroidManifest.xml:30` `usesCleartextTraffic="true"` | ya |
+| Jalur H.264 ganda | kedua berkas masih ada | `ls StreamEncoder.kt TcpStreamServer.kt` → ada | ya |
+
+Rujukan WP pada kolom "Ditutup oleh" cocok dengan isi PLAN: audio WP-03..05,
+status WP-10/12, filter+AI WP-13..16, service WP-17/18, token WP-25..27,
+H.264 WP-31.
+
+## Temuan putaran 2
+
+| ID | Severity | Detail | Bukti |
+|---|---|---|---|
+| QC-11 | note | Tabel "Keadaan saat ini" adalah potret commit ini. Bila WP-03..WP-31 selesai, tabel itu harus diperbarui; kalau tidak, README berubah menjadi klaim yang salah pada arah sebaliknya (menyatakan sisa masalah yang sudah hilang). WP-29 T-077 belum menyebut `README.md`; perlu ditambah saat re-plan. | `README.md:17-32`; PLAN WP-29 `File:` |
+| QC-12 | note | Bagian "Status pengembangan" (baris 43-51) mengulang tiga butir yang juga ada di tabel "Keadaan saat ini" (kamera terikat Activity, `/status` belum terukur, stream tanpa token). Duplikasi ini tidak salah, tetapi menambah beban pemeliharaan: perubahan harus dilakukan di dua tempat. | `README.md:43-51` vs `README.md:27-29` |
+| QC-10 | info | `LICENSE` masih teks MIT kanonik, tidak berubah pada rework. | `LICENSE` |
+
+Tidak ada temuan blocker. QC-06, QC-07, dan QC-08 dinyatakan **tertutup**.
+
+## Keamanan dan hygiene putaran 2
+
+| Aspek | Hasil |
+|---|---|
+| Pola rahasia pada `README.md` | tanpa hasil |
+| Berkas lokal ter-track | tidak ada |
+| Karakter non-ASCII rusak pada `README.md` dan PLAN | 0 baris |
+| Klaim angka FPS/latensi/bandwidth | hanya pernyataan bahwa angka di dokumen adalah default konfigurasi, bukan ambang mutu; tidak ada angka performa baru |
+
+## Catatan push
+
+Guard push dijalankan setelah rework: root repo benar, tree bersih setelah
+commit, tidak ada berkas lokal/rahasia, author `ndeso17`, `diff --check` bersih.
+Verdict PASS_WITH_NOTES → commit artefak QC lalu push `main`.
