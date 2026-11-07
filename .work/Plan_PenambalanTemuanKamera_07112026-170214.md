@@ -17,6 +17,7 @@ H.264 (B-30, D-30), pengesahan namespace alias `CWG-` (D-31).
 | 1 | 7 Nov 2026 | Rencana awal, WP-01..WP-30 | 11 temuan audit + D-27..D-29 |
 | 2 | 7 Nov 2026 | Tambah WP-31 (hapus jalur H.264), perluas WP-29 T-077 agar `AGENTS.md` tidak lagi mencantumkan B-21/B-28/B-29 sebagai terbuka, perbaiki tag T-002 menjadi `CWG-N01` + `CWG-N02` | D-30, D-31; temuan QC-01 dan QC-04 pada laporan `.work/evidence/QC-WP-01.md` |
 | 3 | 7 Nov 2026 | Tambah WP-32 (rapikan `README.md`: hapus tabel "Keadaan saat ini" yang cepat basi, arahkan pembaca ke PLAN), revisi T-085 WP-29 agar tidak menggandakan pekerjaan itu, catat urutan eksekusi WP-32 sebelum WP-05 | Temuan QC-17 (WP-03) dan QC-20 (WP-04): tabel keadaan harus diubah ulang pada hampir setiap WP |
+| 4 | 8 Nov 2026 | Tambah WP-33..WP-35 (pilihan interface jaringan untuk jalur streaming: logika murni, penyimpanan SharedPreferences, UI dan bind server). Urutan: WP-33..WP-35 setelah WP-22 dan sebelum WP-23 | Permintaan pengguna sesi 7–8 Nov 2026. Lingkup ini belum punya ID PRD; ID dan penambahan ke `.work/PRD.md` menunggu pengesahan pengguna |
 
 Tidak ada WP `done` yang dihapus, dinomori ulang, atau diubah kriterianya.
 WP-01 tetap `done`; revisi ini hanya menambah WP-31 dan memperjelas tugas WP
@@ -1065,18 +1066,18 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-07 — `FrameEncoder` dengan satu kali enkode JPEG
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameEncoder.kt` (baru)
 
 Dependensi: WP-06.
 
 Tugas:
-- [ ] T-015 Implementasikan `FrameEncoder.encode(image: ImageProxy, quality: Int): EncodedFrame?`
+- [x] T-015 Implementasikan `FrameEncoder.encode(image: ImageProxy, quality: Int): EncodedFrame?`
       yang mengubah YUV_420_888 ke NV21, merotasi memakai `Nv21Transform`
       sesuai `image.imageInfo.rotationDegrees`, lalu memanggil
       `YuvImage.compressToJpeg` **tepat satu kali** (CWG-N01, CWG-06).
-- [ ] T-016 Kembalikan lebar dan tinggi hasil rotasi bersama byte JPEG agar
+- [x] T-016 Kembalikan lebar dan tinggi hasil rotasi bersama byte JPEG agar
       metadata frame konsisten dengan piksel (CWG-05).
 
 Kriteria terima:
@@ -1089,6 +1090,74 @@ Kriteria terima:
 Risiko: `YuvImage` menolak NV21 dengan dimensi hasil rotasi yang tidak cocok.
 Mitigasi: WP-06 sudah menguji dimensi; kegagalan runtime dilaporkan sebagai
 `cameraState` alasan pada WP-10, bukan exception yang menelan proses.
+
+### Log WP-07 (Executor)
+
+Berkas berubah (1, sesuai daftar WP): `app/src/main/java/dev/ndeso17/camwastegreen/stream/FrameEncoder.kt` (baru).
+
+Checklist:
+
+- [x] T-015 `FrameEncoder.encode(image, quality)` mengubah YUV_420_888 ke NV21
+      lewat `toNv21`, memutar dengan `Nv21Transform.rotateNv21` sesuai
+      `image.imageInfo.rotationDegrees`, lalu memanggil
+      `YuvImage.compressToJpeg` satu kali. Rotasi 0 derajat tidak menyalin
+      buffer. Kegagalan mengembalikan `null`, bukan melempar exception.
+- [x] T-016 `EncodedFrame(jpeg, width, height)` membawa dimensi hasil rotasi:
+      `90`/`270` menukar lebar dan tinggi, `0`/`180` mempertahankan.
+      `toNv21` membaca `rowStride` dan `pixelStride` tiap bidang serta
+      `buffer.position()` sebagai basis, sehingga jarak baris tidak diasumsikan
+      sama dengan lebar.
+
+Output pemeriksaan (mentah):
+
+```text
+grep -c "compressToJpeg" .../stream/FrameEncoder.kt   -> 1
+grep -c "BitmapFactory\|Bitmap.compress\|Bitmap.createBitmap" ...   -> 0
+./gradlew assembleDebug testDebugUnitTest lintDebug   -> BUILD SUCCESSFUL, exit 0
+```
+
+Catatan proses: percobaan pertama `grep -c` bernilai `3` karena nama fungsi
+juga muncul di komentar dan pesan log. Komentar dan pesan diubah agar hanya
+pemanggilan sebenarnya yang tersisa; nilai akhir `1` sesuai kriteria.
+
+Kriteria terima terpenuhi: enkode tunggal, tanpa bitmap perantara, build lulus.
+
+Deviasi: tidak ada. Satu berkas, satu WP.
+
+Keterbatasan:
+
+- `FrameEncoder` belum dipakai jalur sensor; penyambungan ada di WP-14.
+  Sampai WP-14 selesai, berkas ini hanya ikut terkompilasi.
+- Pembacaan `rowStride` belum diuji dengan buffer ber-`rowStride` tidak rata.
+  Uji tersebut butuh `ImageProxy` nyata sehingga masuk MANUAL-VERIFY perangkat.
+- Angka FPS/latensi tidak diklaim.
+
+### Log WP-07 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya sendiri,
+bukan QC independen)**. Status tetap `qc` sampai QC independen memutuskan
+`done`. Pemeriksaan dilakukan pada working tree sebelum commit.
+
+- `grep -c "compressToJpeg" .../FrameEncoder.kt` → `1` (diulang QC sendiri).
+- `grep -c "BitmapFactory\|Bitmap.compress\|Bitmap.createBitmap"` → `0`.
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan QC sendiri).
+- Isi berkas diperiksa, bukan hanya grep: rotasi terjadi **sebelum** enkode
+  (baris `Nv21Transform.rotateNv21` mendahului `compressToJpeg`), dimensi
+  keluaran mengikuti pertukaran 90/270, dan `nv21Size` dari WP-06 dipakai
+  sebagai ukuran buffer sehingga panjang buffer dan dimensi konsisten.
+- Kasus tepi: `image.width`/`height` ≤ 0 mengembalikan `null`; `compressToJpeg`
+  yang mengembalikan `false` juga `null`; tiga jenis exception ditangkap
+  terpisah.
+
+Temuan (note, tidak menahan):
+
+- QC-27: `toNv21` tidak memakai `cropRect`. Bila suatu saat analyzer memakai
+  crop, dimensi dan isi buffer akan berbeda. Belum relevan karena WP-14 tidak
+  memakai crop; dicatat untuk WP-14.
+
+Dampak ke WP berikutnya: WP-08 dapat memakai `EncodedFrame.width/height`
+langsung sebagai dimensi `FramePacket`.
 
 ---
 
@@ -1979,6 +2048,114 @@ ditangani `T-077` WP-29. `README.md` tidak lagi perlu disentuh WP-05 dan WP
 berikutnya kecuali `T-085` di akhir pipeline.
 
 Guard push lulus; artefak QC di-commit dan `main` di-push.
+
+---
+
+## WP-33 — `NetworkChoice` murni untuk memilih interface jalur streaming
+
+Status: todo
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/NetworkChoice.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/NetworkChoiceTest.kt` (baru)
+
+Dependensi: WP-01 (aturan test JVM murni). Dijadwalkan setelah WP-22.
+
+Tugas:
+- [ ] T-091 Buat `NetworkChoice` enum murni `ALL`, `WIFI_LAN`, `USB_TETHERING`
+      dengan label tampilan, tanpa `android.*` dan tanpa akses `NetworkInterface`.
+- [ ] T-092 Buat `NetworkCandidate(name: String, address: String)` dan fungsi murni
+      `classify(interfaceName: String): NetworkChoice` yang memetakan
+      `usb0`, `rndis0`, `eth0` ke `USB_TETHERING`, awalan `wlan` ke `WIFI_LAN`,
+      dan nama lain ke `null` (tidak ditawarkan).
+- [ ] T-093 Buat `selectCandidates(choice: NetworkChoice, candidates: List<NetworkCandidate>): List<NetworkCandidate>`
+      dan `resolveBindAddress(choice: NetworkChoice, candidates: List<NetworkCandidate>): String?`
+      dengan `ALL` berarti bind `0.0.0.0` dan pilihan lain berarti alamat
+      pertama yang cocok, atau `null` bila tidak ada yang cocok.
+- [ ] T-094 Unit test: setiap pilihan memilih kandidat yang benar, `USB_TETHERING`
+      tanpa kandidat USB mengembalikan `null`, `ALL` selalu `0.0.0.0`, dan
+      `classify` menolak nama yang tidak dikenal.
+
+Kriteria terima:
+- `./gradlew testDebugUnitTest --tests "dev.ndeso17.camwastegreen.stream.NetworkChoiceTest"`
+  lulus dengan minimal enam kasus.
+- `grep -n "android\." app/src/main/java/dev/ndeso17/camwastegreen/stream/NetworkChoice.kt`
+  kosong.
+- Bukti: keluaran test pada Log WP.
+
+Risiko: nama interface berbeda pada tiap perangkat, sehingga pilihan USB tidak
+cocok pada HP tertentu.
+Mitigasi: `classify` hanya menerima nama yang terbukti dipakai (`usb0`,
+`rndis0`, `eth0`), dan `resolveBindAddress` mengembalikan `null` yang harus
+ditampilkan sebagai "interface tidak tersedia", bukan diam-diam jatuh ke
+`0.0.0.0`.
+
+---
+
+## WP-34 — Simpan pilihan interface dan kunci saat streaming
+
+Status: todo
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefs.kt` (baru), `app/src/test/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefsTest.kt` (baru)
+
+Dependensi: WP-33.
+
+Tugas:
+- [ ] T-095 Buat `parseChoice(raw: String?): NetworkChoice` murni dengan default
+      `ALL` untuk nilai kosong atau tidak dikenal, dan `serialize(choice): String`.
+- [ ] T-096 Buat pembungkus tipis `StreamInterfacePrefs` di atas
+      `SharedPreferences` bernama `stream_settings` dengan kunci
+      `interface_choice`, memakai `parseChoice`/`serialize`.
+- [ ] T-097 Unit test: `parseChoice(null)`, nilai kosong, nilai tidak dikenal,
+      dan setiap nilai sah; round-trip `serialize`→`parseChoice` untuk tiga
+      pilihan.
+
+Kriteria terima:
+- `./gradlew testDebugUnitTest --tests "dev.ndeso17.camwastegreen.stream.StreamInterfacePrefsTest"`
+  lulus dengan minimal lima kasus.
+- Logika parsing berada di berkas tanpa `android.*`; `grep -n "android\." app/src/main/java/dev/ndeso17/camwastegreen/stream/StreamInterfacePrefs.kt`
+  hanya menemukan impor `android.content.*` pada pembungkus, bukan pada
+  `parseChoice`.
+- Bukti: keluaran test pada Log WP.
+
+Risiko: preferensi tersimpan sebagai nilai yang tidak lagi dikenal setelah
+pilihan dihapus.
+Mitigasi: `parseChoice` mengembalikan `ALL` untuk nilai tidak dikenal, dan
+default yang sama dipakai saat kunci belum ada.
+
+---
+
+## WP-35 — Terapkan pilihan interface pada server dan UI
+
+Status: todo
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`, `app/src/main/res/values/strings.xml`
+
+Dependensi: WP-12, WP-22, WP-33, WP-34.
+
+Tugas:
+- [ ] T-098 Server menerima alamat bind hasil `resolveBindAddress` dan memakai
+      konstruktor NanoHTTPD yang menerima hostname; `ALL` tetap `0.0.0.0`.
+- [ ] T-099 Kumpulkan `NetworkCandidate` dari interface aktif di satu tempat,
+      lalu teruskan ke `resolveBindAddress`; pilihan yang tersimpan dipakai saat
+      server start, bukan saat per frame.
+- [ ] T-100 Tambah kontrol pilihan interface (tiga opsi) di panel kontrol beserta
+      tombol terapkan; tombol terapkan dinonaktifkan saat streaming berjalan dan
+      pesan "hentikan stream untuk mengganti interface" ditampilkan.
+- [ ] T-101 Tampilkan alamat dan URL `/video` sesuai interface yang dipilih,
+      dan tampilkan "interface tidak tersedia" bila `resolveBindAddress`
+      mengembalikan `null`.
+
+Kriteria terima:
+- `grep -rn "NanoHTTPD(port)" app/src/main/java` kosong; konstruktor memakai
+  alamat hasil resolusi.
+- `./gradlew assembleDebug`, `./gradlew testDebugUnitTest`, `./gradlew lintDebug`
+  lulus.
+- Teks baru ada di `strings.xml`, tidak ditulis langsung di layout atau kode.
+- Bukti: keluaran grep dan build pada Log WP, plus MANUAL-VERIFY pada perangkat
+  untuk dua interface nyata (Wi-Fi dan USB tethering) yang dicatat apa adanya.
+
+Risiko: pilihan interface dianggap bukti konektivitas backend.
+Mitigasi: MANUAL-VERIFY hanya mencatat alamat yang tampil dan hasil `curl`
+dari host lain; korespondensi encoder dengan backend tetap `B-24`.
 
 ---
 
