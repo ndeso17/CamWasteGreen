@@ -2122,17 +2122,17 @@ berkas yang tercantum); WP-36 harus selesai sebelum gerbang WP-28.
 
 ## WP-16 — Hapus dependensi ML Kit dan camera-extensions
 
-Status: todo
+Status: qc
 
 File: `app/build.gradle.kts`
 
 Dependensi: WP-15.
 
 Tugas:
-- [ ] T-041 Hapus `com.google.mlkit:face-detection`, `com.google.mlkit:segmentation-selfie`,
+- [x] T-041 Hapus `com.google.mlkit:face-detection`, `com.google.mlkit:segmentation-selfie`,
       dan `androidx.camera:camera-extensions` dari blok `dependencies`
       (CWG-N02).
-- [ ] T-042 Catat ukuran APK sebelum dan sesudah sebagai bukti pengurangan
+- [x] T-042 Catat ukuran APK sebelum dan sesudah sebagai bukti pengurangan
       beban (CWG-N01).
 
 Kriteria terima:
@@ -2145,6 +2145,96 @@ Kriteria terima:
 Risiko: ada kelas yang masih memakai API `camera-extensions`.
 Mitigasi: build wajib lulus; bila gagal, tambahkan kembali hanya dependensi
 yang benar-benar dipakai dan catat alasannya di Log.
+
+### Log WP-16 (Executor)
+
+Berkas berubah (1): `app/build.gradle.kts`. Hanya blok `dependencies` yang
+berubah; `android` block, `plugins`, dan konfigurasi build tidak disentuh.
+
+Checklist:
+
+- [x] T-041 Tiga dependensi dihapus dari blok `dependencies`:
+      `com.google.mlkit:face-detection:16.1.7`,
+      `com.google.mlkit:segmentation-selfie:16.0.0-beta5`, dan
+      `androidx.camera:camera-extensions:1.3.0`. Tidak ada dependensi
+      pengganti; ketiga pustaka tidak dirujuk kode aplikasi.
+- [x] T-042 Ukuran APK dicatat sebelum dan sesudah (lihat di bawah).
+
+Output pemeriksaan (mentah):
+
+```text
+grep -rn "mlkit|MlKit|MlKitAnalyzer|CameraExtensions|ExtensionsManager|segmentation|Segmentation|faceDetection|FaceDetector" app/src
+  -> tanpa hasil (exit 1)   [dicek SEBELUM penghapusan dependensi]
+
+grep -n "mlkit|camera-extensions" app/build.gradle.kts
+  -> tanpa hasil (exit 1)
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> BUILD SUCCESSFUL, exit 0
+
+APK sebelum: 120.021.999 byte (IPCam_08November2026_0343.apk)
+APK sesudah:   8.674.356 byte (IPCam_08November2026_0349.apk)
+Selisih:    -111.347.643 byte (-92,8%)
+
+Isi APK sesudah: 948 entri, total uncompressed 17.464.373 byte
+  classes.dex       10.439.256
+  classes6.dex       3.526.216
+  resources.arsc    1.144.080
+  classes2.dex         479.128
+  lib/x86_64/libgraphics-core.so  218.760
+  lib/arm64-v8a/libgraphics-core.so 212.112
+
+lint: 0 error, 69 warning (Counter({'Warning': 69}) dari
+      app/build/reports/lint-results-debug.xml)
+```
+
+Keterbatasan dan hal yang **belum** terbukti:
+
+- Penurunan 111 MB dicatat apa adanya sebagai hasil dua build berturutan.
+  Kontribusinya belum dipisah per dependensi: tidak ada build pembanding
+  dengan hanya `face-detection` yang dikembalikan, atau hanya
+  `segmentation-selfie`, atau hanya `camera-extensions`. Jadi tidak boleh
+  diklaim "ML Kit-biggest" atau "camera-extensions biggest" tanpa bukti
+  tambahan. Yang terbukti: setelah tiga dependensi itu dilepas, APK debug
+  susut drastis, dan aplikasi tetap lulus build, unit test, dan lint.
+- Baseline lint di `AGENTS.md` menyebut 1 error dan 111 warning pada saat
+  package rename. Sekarang 0 error dan 69 warning. Penurunan warning
+  berasal dari penghapusan jalur audio/filter di WP-04, WP-05, WP-15, dan
+  WP-36, bukan dari WP-16 secara khusus. Kriteria WP-16 "tidak menambah
+  error baru" terpenuhi: 0 error.
+- Angka ukuran APK bersifat debug dan tidak mewakili ukuran rilis. Yang
+  relevan untuk `CWG-N01` adalah berkurangnya kelas dan pustaka native pada
+  jalur sensor; APK rilis dengan minify belum diukur.
+- Pohon dependensi diverifikasi dengan
+  `./gradlew app:dependencyInsight --configuration debugRuntimeClasspath`:
+  `androidx.camera:camera-core/camera-camera2/camera-lifecycle/camera-video`
+  semuanya 1.4.0, tidak ada lagi `camera-extensions` maupun
+  `com.google.mlkit`.
+- APK debug belum dipasang ulang ke perangkat setelah WP-16.
+
+### Log WP-16 (QC)
+
+Verdict: **PASS sebagai pemeriksaan sendiri (Executor memeriksa hasilnya
+sendiri, bukan QC independen)**. Status tetap `qc`.
+
+- `grep -n "mlkit|camera-extensions" app/build.gradle.kts` → tanpa hasil
+  (exit 1).
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` → `BUILD SUCCESSFUL`,
+  exit `0` (dijalankan ulang sendiri setelah komentar diperbaiki).
+- Isi `build.gradle.kts` diperiksa blok per blok; tidak ada dependensi
+  tersisa yang menunjuk paket inferensi.
+- Isi perubahan `git diff` dibatasi pada blok `dependencies`
+  `app/build.gradle.kts`; tidak ada berkas lain yang diubah WP ini.
+
+Temuan:
+
+- QC-42: penurunan ukuran APK 111 MB belum dipisah per dependensi. Tidak
+  memblokir WP-16, tetapi klaim dampak per-pustaka tidak boleh dibuat.
+- QC-43: APK debug 8.674.356 byte masih multi-ABI (x86, x86_64, arm64-v8a,
+  arm). Menghapus ABI yang tidak dipakai perangkat sasaran ada di lingkup
+  WP-27 atau WP-28, bukan di sini.
+
+Dampak ke WP berikutnya: WP-17 boleh mulai. Tidak ada dependensi runtime
+yang dihapus pada WP-16 dipakai kode aplikasi.
 
 ---
 

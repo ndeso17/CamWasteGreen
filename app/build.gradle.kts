@@ -81,12 +81,8 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd-webserver:2.3.1")
     implementation(libs.androidx.graphics.core)
 
-    // ML Kit — Face Detection + Selfie Segmentation
-    implementation("com.google.mlkit:face-detection:16.1.7")
-    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta5")
-
-    // CameraX extensions (for ML Kit interop)
-    implementation("androidx.camera:camera-extensions:1.3.0")
+    // Paket inferensi wajah/segmentasi dan ekstensi kamera sengaja tidak
+    // dipakai: aplikasi ini hanya menangkap dan menyajikan frame (CWG-N02).
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
