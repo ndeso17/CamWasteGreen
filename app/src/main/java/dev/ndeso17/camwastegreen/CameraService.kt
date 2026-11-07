@@ -206,11 +206,6 @@ class CameraService : Service(), LifecycleOwner {
     /** Kunci AE/AWB/AF hanya diminta sekali per ikatan kamera. */
     private var tuningRequested = false
 
-    // H.264 streaming — dipindahkan apa adanya dari MainActivity; WP-31
-    // menghapus jalur ini karena tidak pernah menerima frame.
-    private var streamEncoder: StreamEncoder? = null
-    private var tcpStreamServer: TcpStreamServer? = null
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -357,16 +352,6 @@ class CameraService : Service(), LifecycleOwner {
             .setResolutionSelector(resolutionSelector)
             .build()
 
-        // H.264 stream encoder
-        val encoder = StreamEncoder()
-        streamEncoder = encoder
-        try {
-            encoder.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Gagal memulai encoder H.264", e)
-            streamEncoder = null
-        }
-
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             analyze(imageProxy)
         }
@@ -385,12 +370,6 @@ class CameraService : Service(), LifecycleOwner {
                 if (MJPEGServerInstance.start(this, config)) {
                     Log.i(TAG, "Server MJPEG aktif di port ${MJPEGServerInstance.getPort()}")
                 }
-            }
-
-            if (streamEncoder != null) {
-                tcpStreamServer = TcpStreamServer(streamEncoder!!)
-                tcpStreamServer?.start()
-                Log.i(TAG, "Server TCP H.264 aktif di port 8086")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Gagal mengikat kamera: ${e.message}", e)
@@ -457,10 +436,6 @@ class CameraService : Service(), LifecycleOwner {
     }
 
     private fun stopCamera() {
-        tcpStreamServer?.stop()
-        tcpStreamServer = null
-        streamEncoder?.release()
-        streamEncoder = null
         cameraProvider?.unbindAll()
         cameraProvider = null
         Log.i(TAG, "Kamera dihentikan.")

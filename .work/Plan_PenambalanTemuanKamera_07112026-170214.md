@@ -3639,7 +3639,7 @@ diisi; status awal eksplisit belum diuji.
 
 ## WP-31 — Hapus jalur H.264 (`StreamEncoder`, `TcpStreamServer`)
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`,
 `app/src/main/java/dev/ndeso17/camwastegreen/StreamEncoder.kt` (hapus),
@@ -3653,13 +3653,13 @@ besar. WP-28 adalah gerbang mutu akhir dan dependensinya sudah mencantumkan
 WP-31. Nomor lanjutan dipakai karena WP `done` tidak boleh dinomori ulang.
 
 Tugas:
-- [ ] T-082 Hapus pemanggilan `StreamEncoder` dan `TcpStreamServer` dari
+- [x] T-082 Hapus pemanggilan `StreamEncoder` dan `TcpStreamServer` dari
       `MainActivity.kt`: field `streamEncoder`, `tcpStreamServer`, blok
       `encoder.start()`, pemanggilan `enc.encode(nv21, ptsUs)`, dan blok
       penghentian encoder (CWG-N01, CWG-N02).
-- [ ] T-083 Hapus berkas `StreamEncoder.kt` dan `TcpStreamServer.kt`
+- [x] T-083 Hapus berkas `StreamEncoder.kt` dan `TcpStreamServer.kt`
       (CWG-N02, D-30).
-- [ ] T-084 Pastikan tidak ada rujukan tersisa ke kedua kelas, dan tidak ada
+- [x] T-084 Pastikan tidak ada rujukan tersisa ke kedua kelas, dan tidak ada
       enkode tambahan pada jalur sensor selain satu `compressToJpeg` di
       `FrameEncoder` (CWG-N01).
 
@@ -3682,6 +3682,55 @@ Risiko: penghapusan tidak mengurangi beban CPU bila `StreamEncoder` ternyata
 aktif pada jalur sensor.
 Mitigasi: tidak diklaim sebagai penghematan terukur; pengukuran beban tetap
 menunggu perangkat dan ambang B-06.
+
+### Log WP-31 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Deviasi penting dari daftar `File:`: pemanggilan `StreamEncoder` dan
+`TcpStreamServer` ternyata **bukan** di `MainActivity.kt` melainkan di
+`CameraService.kt`. Pemindahan kamera ke service (WP-18) sudah memindahkan
+jalur H.264 ikut serta. `MainActivity.kt` tidak lagi memuat rujukan apa pun,
+sehingga berkas itu tidak diubah pada WP ini. Yang disentuh:
+
+- `CameraService.kt`: hapus blok `encoder.start()`, hapus field
+  `streamEncoder`/`tcpStreamServer`, hapus blok pembuatan `TcpStreamServer`
+  dan log "Server TCP H.264 aktif di port 8086", hapus penghentian encoder di
+  `stopCamera()`.
+- `StreamEncoder.kt` dan `TcpStreamServer.kt`: dihapus.
+
+Hasil pembuktian:
+
+```text
+grep -rn "StreamEncoder\|TcpStreamServer\|8086" app/src
+  -> tidak ada hasil
+
+grep -c "compressToJpeg\|Bitmap.compress" stream/FrameEncoder.kt  -> 1
+grep -c "compressToJpeg\|Bitmap.compress" MainActivity.kt          -> 0
+
+./gradlew assembleDebug testDebugUnitTest lintDebug -> GATE_EXIT=0
+  lint: 0 error, 61 warning (tidak ada error baru)
+
+Ukuran APK debug:
+  sebelum WP-31 (06:26): 8.717.135 byte
+  sesudah WP-31 (06:28): 8.700.751 byte
+  selisih: -16.384 byte (tidak ditafsirkan sebagai penghematan runtime)
+```
+
+Keterbatasan: tidak ada klaim pengurangan beban CPU. Enkode JPEG tunggal di
+`FrameEncoder` adalah satu-satunya enkode pada jalur sensor, sesuai CWG-N01.
+
+Dampak ke temuan QC-49 ("H.264 dibuat tiap bind"): temuan itu gugur sendiri
+karena jalur H.264 tidak ada lagi.
+
+### Log WP-31 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — nol rujukan tersisa; berkas benar-benar terhapus.
+- PASS — satu enkode JPEG di jalur sensor, tidak ada di `MainActivity`.
+- PASS — gerbang penuh hijau, jumlah warning tidak berubah.
+- PASS — deviasi lokasi berkas dicatat dan dijelaskan, bukan disembunyikan.
 
 ---
 
