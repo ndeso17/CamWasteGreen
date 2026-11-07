@@ -629,7 +629,7 @@ Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ## WP-04 — Hapus kontrol mikrofon dan equalizer dari UI
 
-Status: qc
+Status: done
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`,
 `app/src/main/res/layout/activity_main.xml`, `README.md`
@@ -719,6 +719,53 @@ Keterbatasan:
 - Tata letak panel kontrol berubah: tombol kamera dan kunci orientasi kini
   rata kiri tanpa tombol mikrofon di depannya, dan sisi kanan baris peek
   kosong. Tampilan belum diperiksa pada perangkat; masuk MANUAL-VERIFY.
+
+### Log WP-04 (QC)
+
+Verdict: **PASS_WITH_NOTES**. Laporan: `.work/evidence/QC-WP-04.md`. Commit
+diperiksa: `1b7490e`.
+
+Kriteria terima terpenuhi dan dibuktikan ulang oleh QC:
+
+- `grep -rn "MicManager\|EqualizerView\|RECORD_AUDIO" MainActivity.kt activity_main.xml`
+  → `NONE`.
+- Jumlah `@+id/` pada layout: 25 (baseline `cfa7f24`) menjadi 23 — turun
+  tepat dua view.
+- `REQUIRED_PERMISSIONS` = `arrayOf(Manifest.permission.CAMERA)`.
+- `contentDescription="Mic"` hilang bersama view tombol mikrofon.
+- `./gradlew assembleDebug testDebugUnitTest` → `BUILD SUCCESSFUL` (dijalankan
+  QC sendiri).
+- `./gradlew lintDebug` → `BUILD FAILED`, 1 error `MicManager.kt:54` + 112
+  warning. Error lama di berkas yang dihapus WP-05; bukan regresi.
+- Anti-ghost: kemunculan `MicManager|btnMicToggle|equalizerView` di
+  `MainActivity.kt` 12 → 0; `@+id/` 25 → 23; `R.id.btnMicToggle`/
+  `R.id.equalizerView` tidak dirujuk dari mana pun di `app/src`.
+- Layout diparse ulang sebagai XML → `XML OK`.
+
+Warning lint tidak diterima begitu saja. Baseline `cfa7f24` dibangun ulang di
+pohon yang sama, `lintDebug` dijalankan dua kali, dan kedua daftar warning
+dinormalisasi lalu dibandingkan. Hasil `diff` hanya tiga baris: +2
+`UnusedResources` untuk `ic_mic.xml` dan `ic_mic_off.xml`, -1 `HardcodedText`
+untuk `"Mic"`. Tidak ada warning lain yang muncul atau hilang. Setelah
+perbandingan `app/src` dipulihkan ke `1b7490e` dan ketiga gerbang dijalankan
+ulang.
+
+Temuan (semua note, tidak menahan WP-05):
+
+- QC-18: lint masih gagal 1 error lama dan 112 warning; ditutup WP-05.
+- QC-19: `EqualizerView.kt` kini tanpa view pemanggil tetapi masih memanggil
+  `MicManager.amplitude`; kode mati sementara, dihapus WP-05.
+- QC-20: baris audio `README.md` akan kembali tidak akurat pada WP-05;
+  pembaruan akhir sudah ada pada `T-085` WP-29.
+- QC-21: `AGENTS.md:44,67` masih menyebut `/mic/toggle`; sudah tercakup
+  `T-077` WP-29.
+
+Catatan keamanan: P0-2 belum tuntas. Izin `RECORD_AUDIO` masih ada di
+manifest dan kelas `MicManager` masih ada sampai WP-05. Yang sudah tertutup:
+aplikasi tidak lagi meminta izin mikrofon saat mulai dan tidak ada lagi
+tombol UI untuk menyalakan mikrofon.
+
+Guard push lulus; artefak QC di-commit dan `main` di-push.
 
 ---
 
