@@ -273,16 +273,16 @@ dicatat di `../.work/FINDINGS.md`.
 
 ## WP-02 — Lisensi MIT dan atribusi fork
 
-Status: todo
+Status: qc
 
 File: `LICENSE`, `README.md`
 
 Dependensi: WP-01 (D-28).
 
 Tugas:
-- [ ] T-004 Tambahkan `LICENSE` berisi teks MIT dengan pemegang hak `2026 ndeso17`
+- [x] T-004 Tambahkan `LICENSE` berisi teks MIT dengan pemegang hak `2026 ndeso17`
       (CWG-N03).
-- [ ] T-005 Tambahkan `README.md`: tujuan repo, batas peran sebagai kamera sensor,
+- [x] T-005 Tambahkan `README.md`: tujuan repo, batas peran sebagai kamera sensor,
       asal kode `https://github.com/ndeso17/ipcam`, atribusi, perintah build, dan
       rujukan `.work/` (CWG-N03).
 
@@ -297,6 +297,47 @@ Kriteria terima:
 Risiko: nama pemegang hak belum dikonfirmasi tertulis.
 Mitigasi: README menyatakan nama pemegang hak dapat disesuaikan bila pengguna
 menetapkan nama lain; dicatat di Log WP dan diusulkan sebagai amandemen D-28.
+
+### Log WP-02 (Executor)
+
+Berkas berubah (2, sesuai daftar WP): `LICENSE` (baru), `README.md` (baru).
+
+Checklist:
+
+- [x] T-004 `LICENSE` memuat `MIT License` dan pemegang hak
+      `Copyright (c) 2026 ndeso17`. Nama itu dikonfirmasi pengguna pada sesi
+      7 November 2026 (jawaban "2026 ndeso17"), sehingga risiko nama pemegang
+      hak pada blok Risiko **tertutup** dan D-28 tidak perlu diamandemen.
+      Bukti: `grep -c "MIT License" LICENSE` = 1;
+      `grep -c 'THE SOFTWARE IS PROVIDED "AS IS"' LICENSE` = 1.
+- [x] T-005 `README.md` memuat tujuan repo, batas peran (tidak menjalankan
+      inferensi, tanpa audio, tanpa filter/AI pada jalur sensor), asal kode
+      `https://github.com/ndeso17/ipcam` beserta atribusi, perintah build,
+      rujukan `.work/`, status pengembangan yang menyatakan pekerjaan audit
+      belum selesai, dan pernyataan bahwa angka di dokumen adalah default
+      konfigurasi bukan ambang mutu. Bukti:
+      `grep -c "ndeso17/ipcam" README.md` = 1; baris 10 memuat
+      "tidak menjalankan inferensi".
+
+Kriteria terima terpenuhi:
+
+- `LICENSE` ada dan memuat `MIT License` serta frasa jaminan `AS IS`.
+- `README.md` menyebut `ndeso17/ipcam` dan menyatakan aplikasi tidak
+  menjalankan inferensi.
+- `git status --short` hanya memuat `LICENSE`, `README.md`, dan PLAN; tidak
+  memuat `local.properties` maupun berkas rahasia.
+- `./gradlew assembleDebug` → `BUILD SUCCESSFUL in 5s`; tidak ada perubahan
+  build.
+
+Deviasi: tidak ada. Kedua berkas baru berada pada daftar `File:` WP.
+
+Keterbatasan:
+
+- Lisensi tidak menghapus kewajiban menghormati hak cipta kode asal
+  `ndeso17/ipcam`; README menyatakannya secara eksplisit.
+- README menyatakan pekerjaan audit belum selesai. Pernyataan itu wajib
+  diperbarui pada WP-29 setelah WP-01..WP-31 selesai.
+- Tidak ada klaim mutu, FPS, atau latensi pada README.
 
 ---
 
