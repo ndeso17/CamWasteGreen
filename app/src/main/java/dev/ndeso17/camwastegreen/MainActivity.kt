@@ -13,6 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import dev.ndeso17.camwastegreen.stream.NetworkChoice
+import dev.ndeso17.camwastegreen.stream.StreamInterfacePrefs
 import java.net.NetworkInterface
 
 /**
@@ -40,6 +42,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvCameraState: TextView
     private lateinit var controlPanel: LinearLayout
     private lateinit var sheetBehavior: BottomSheetBehavior<LinearLayout>
+    private lateinit var groupInterface: RadioGroup
+    private lateinit var btnApplyInterface: Button
+    private lateinit var tvInterfaceHint: TextView
+
+    /** Penyimpanan pilihan interface; dibaca saat start server (WP-35). */
+    private lateinit var interfacePrefs: StreamInterfacePrefs
 
     private var currentFps = 20
     private var currentQuality = 80
@@ -59,9 +67,6 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private const val STATUS_INTERVAL_MS = 1000L
 
-        /** Sama dengan default `CameraConfig` (D-29); dipakai hanya untuk teks. */
-        private const val DEFAULT_PORT = 8085
-
         private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(Manifest.permission.CAMERA, Manifest.permission.POST_NOTIFICATIONS)
         } else {
@@ -73,9 +78,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        interfacePrefs = StreamInterfacePrefs(this)
+
         initViews()
         setupBottomSheet()
         setupButtonListeners()
+        showStoredChoice()
 
         if (allPermissionsGranted()) {
             updateUI()
@@ -120,6 +128,9 @@ class MainActivity : AppCompatActivity() {
         btnSwitchCamera = findViewById(R.id.btnSwitchCamera)
         tvUsbStatus = findViewById(R.id.tvUsbStatus)
         tvCameraState = findViewById(R.id.tvCameraState)
+        groupInterface = findViewById(R.id.groupInterface)
+        btnApplyInterface = findViewById(R.id.btnApplyInterface)
+        tvInterfaceHint = findViewById(R.id.tvInterfaceHint)
     }
 
     private fun setupBottomSheet() {
@@ -191,6 +202,39 @@ class MainActivity : AppCompatActivity() {
             CameraService.setQuality(this, currentQuality)
             updateUI()
         }
+
+        btnApplyInterface.setOnClickListener {
+            // Penjaga kedua: tombol sudah dinonaktifkan saat streaming, tetapi
+            // status dapat berubah di antara pembaruan UI dan ketukan.
+            if (MJPEGServerInstance.isRunning()) {
+                Toast.makeText(this, R.string.label_interface_locked, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            interfacePrefs.setChoice(selectedChoice())
+            Toast.makeText(this, R.string.toast_interface_saved, Toast.LENGTH_SHORT).show()
+            updateUI()
+        }
+    }
+
+    /** Pilihan yang sedang ditandai di radio group. */
+    private fun selectedChoice(): NetworkChoice = when (groupInterface.checkedRadioButtonId) {
+        R.id.rbInterfaceWifiLan -> NetworkChoice.WIFI_LAN
+        R.id.rbInterfaceUsbTethering -> NetworkChoice.USB_TETHERING
+        else -> NetworkChoice.ALL
+    }
+
+    /**
+     * Tampilkan pilihan tersimpan. Dipanggil sekali saat Activity dibuat;
+     * pembaruan berkala tidak menimpa pilihan operator yang belum diterapkan.
+     */
+    private fun showStoredChoice() {
+        groupInterface.check(
+            when (interfacePrefs.getChoice()) {
+                NetworkChoice.WIFI_LAN -> R.id.rbInterfaceWifiLan
+                NetworkChoice.USB_TETHERING -> R.id.rbInterfaceUsbTethering
+                NetworkChoice.ALL -> R.id.rbInterfaceAll
+            }
+        )
     }
 
     /**
@@ -213,14 +257,20 @@ class MainActivity : AppCompatActivity() {
         tvFpsValue.text = currentFps.toString()
         tvQualityValue.text = qualityLabel
 
-        tvIpInfo.text = if (running) {
-            getString(
-                R.string.label_stream_url,
-                getDeviceIpAddress(),
-                MJPEGServerInstance.getPort() ?: DEFAULT_PORT
-            )
-        } else {
-            getString(R.string.label_stream_offline)
+        val port = MJPEGServerInstance.getPort() ?: MJPEGServerInstance.config.port
+        val bindAddress = MJPEGServerInstance.getBindAddress()
+
+        tvIpInfo.text = when {
+            running && bindAddress == null ->
+                getString(R.string.label_stream_offline)
+            // `0.0.0.0` bukan alamat yang dapat diketik klien; tampilkan
+            // alamat interface yang benar-benar ada.
+            running && bindAddress == NetworkChoice.ANY_ADDRESS ->
+                getString(R.string.label_stream_url_all, getDeviceIpAddress(), port)
+            running ->
+                getString(R.string.label_stream_url, bindAddress, port)
+            else ->
+                getString(R.string.label_stream_offline)
         }
 
         tvCameraState.text = if (running) {
@@ -243,6 +293,17 @@ class MainActivity : AppCompatActivity() {
         btnDecreaseQuality.isEnabled = running
         btnSwitchCamera.isEnabled = running
 
+        // Pilihan interface hanya berlaku pada start server berikutnya, jadi
+        // kontrolnya dikunci selama stream berjalan (T-100).
+        groupInterface.isEnabled = !running
+        btnApplyInterface.isEnabled = !running
+        tvInterfaceHint.text = if (running) {
+            getString(R.string.label_interface_locked)
+        } else if (MJPEGServerInstance.bindAddressFor(interfacePrefs.getChoice()) == null) {
+            getString(R.string.label_interface_unavailable)
+        } else {
+            getString(R.string.label_interface_ready)
+        }
     }
 
     /** Label tingkat kualitas. Ini nilai target, bukan pengukuran. */

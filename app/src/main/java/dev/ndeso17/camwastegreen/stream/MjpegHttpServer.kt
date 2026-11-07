@@ -34,10 +34,12 @@ import java.util.concurrent.locks.ReentrantLock
 class MjpegHttpServer(
     private val frameSource: FrameSource,
     private val statusRegistry: StatusRegistry,
+    /** Alamat bind hasil `resolveBindAddress`; `0.0.0.0` berarti semua. */
+    val bindAddress: String,
     port: Int,
     private val maxClients: Int,
     private val writeTimeoutMs: Long
-) : NanoHTTPD(port) {
+) : NanoHTTPD(bindAddress, port) {
 
     /** Slot klien bersama; satu instance agar batas berlaku lintas koneksi. */
     private val clientSlots = StreamSession(

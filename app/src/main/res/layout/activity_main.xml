@@ -277,6 +277,62 @@
                     android:text="+"
                     android:textSize="22sp" />
             </LinearLayout>
+
+            <TextView
+                style="@style/SheetLabel"
+                android:text="@string/label_interface" />
+
+            <!--
+                Pilihan interface jalur streaming. Hanya berlaku pada start
+                server berikutnya; saat stream berjalan kontrol dinonaktifkan
+                (WP-35, T-100).
+            -->
+            <RadioGroup
+                android:id="@+id/groupInterface"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginBottom="8dp">
+
+                <RadioButton
+                    android:id="@+id/rbInterfaceAll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/interface_all"
+                    android:textColor="@color/white"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rbInterfaceWifiLan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/interface_wifi_lan"
+                    android:textColor="@color/white"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rbInterfaceUsbTethering"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/interface_usb_tethering"
+                    android:textColor="@color/white"
+                    android:textSize="14sp" />
+            </RadioGroup>
+
+            <Button
+                android:id="@+id/btnApplyInterface"
+                style="@style/ControlButton.Green"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/action_apply_interface" />
+
+            <TextView
+                android:id="@+id/tvInterfaceHint"
+                style="@style/InfoText"
+                android:layout_width="match_parent"
+                android:layout_marginBottom="16dp"
+                android:text="@string/label_interface_locked" />
         </LinearLayout>
     </LinearLayout>
 

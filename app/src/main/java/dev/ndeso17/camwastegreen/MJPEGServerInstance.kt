@@ -5,7 +5,13 @@ import android.util.Log
 import dev.ndeso17.camwastegreen.stream.CameraConfig
 import dev.ndeso17.camwastegreen.stream.FrameSource
 import dev.ndeso17.camwastegreen.stream.MjpegHttpServer
+import dev.ndeso17.camwastegreen.stream.NetworkCandidate
+import dev.ndeso17.camwastegreen.stream.NetworkChoice
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
+import dev.ndeso17.camwastegreen.stream.StreamInterfacePrefs
+import dev.ndeso17.camwastegreen.stream.resolveBindAddress
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 /**
  * Singleton pemilik server MJPEG, [FrameSource], dan [StatusRegistry].
@@ -39,9 +45,61 @@ object MJPEGServerInstance {
     private var server: MjpegHttpServer? = null
 
     /**
+     * Kandidat alamat IPv4 dari interface yang aktif sekarang.
+     *
+     * Satu-satunya tempat enumerasi `NetworkInterface`. Pemanggil (server dan
+     * UI) memakai daftar yang sama, sehingga alamat yang ditampilkan tidak
+     * dihitung dengan aturan berbeda dari alamat yang benar-benar dipakai
+     * bind. Interface loopback dan yang tidak `up` dilewati.
+     */
+    fun candidates(): List<NetworkCandidate> {
+        val result = mutableListOf<NetworkCandidate>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val intf = interfaces.nextElement()
+                if (!intf.isUp || intf.isLoopback) continue
+                val addresses = intf.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (address.isLoopbackAddress || address !is Inet4Address) continue
+                    val host = address.hostAddress ?: continue
+                    result.add(NetworkCandidate(intf.name, host))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal membaca daftar interface: ${e.message}", e)
+        }
+        return result
+    }
+
+    /**
+     * Pilihan interface yang tersimpan di perangkat.
+     *
+     * Dibaca saat server distart, bukan saat frame diterbitkan, sehingga
+     * pilihan hanya berpengaruh pada siklus start berikutnya.
+     */
+    fun storedChoice(context: Context): NetworkChoice =
+        StreamInterfacePrefs(context).getChoice()
+
+    /**
+     * Alamat bind untuk [choice] berdasarkan interface yang aktif.
+     *
+     * @return alamat, atau `null` bila pilihan tidak tersedia. `null` tidak
+     *   boleh diganti `0.0.0.0`: itu akan melebarkan bind melebihi pilihan
+     *   operator.
+     */
+    fun bindAddressFor(choice: NetworkChoice): String? =
+        resolveBindAddress(choice, candidates())
+
+    /**
      * Mulai server jika belum berjalan.
      *
+     * Alamat bind diambil dari pilihan interface tersimpan saat pemanggilan
+     * ini, bukan dari nilai yang dibaca ulang per frame.
+     *
      * @return `true` bila server berjalan (baru atau sudah), `false` bila gagal
+     *   atau bila interface pilihan tidak tersedia
      */
     @Synchronized
     fun start(context: Context, config: CameraConfig = this.config): Boolean {
@@ -52,10 +110,19 @@ object MJPEGServerInstance {
             return true
         }
 
+        val choice = storedChoice(context)
+        val bindAddress = bindAddressFor(choice)
+        if (bindAddress == null) {
+            Log.e(TAG, "Interface ${choice.storageValue} tidak tersedia; server tidak dimulai")
+            statusRegistry.setCameraState(StatusRegistry.CameraState.ERROR, "interface_unavailable")
+            return false
+        }
+
         return try {
             val created = MjpegHttpServer(
                 frameSource = frameSource,
                 statusRegistry = statusRegistry,
+                bindAddress = bindAddress,
                 port = port,
                 maxClients = config.maxClients,
                 writeTimeoutMs = config.writeTimeoutMs
@@ -63,7 +130,7 @@ object MJPEGServerInstance {
             created.start(SOCKET_READ_TIMEOUT_MS, true)
             server = created
             statusRegistry.setCameraState(StatusRegistry.CameraState.STARTING)
-            Log.i(TAG, "Server MJPEG berjalan di port $port")
+            Log.i(TAG, "Server MJPEG berjalan di $bindAddress:$port")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Gagal memulai server: ${e.message}", e)
@@ -118,6 +185,12 @@ object MJPEGServerInstance {
 
     /** Port aktif, atau `null` bila server tidak berjalan. */
     fun getPort(): Int? = server?.listeningPort
+
+    /**
+     * Alamat bind yang benar-benar dipakai server, atau `null` bila server
+     * tidak berjalan. Nilai `0.0.0.0` berarti bind ke semua interface.
+     */
+    fun getBindAddress(): String? = server?.bindAddress
 
     /** Status terakhir untuk ditampilkan Activity. */
     fun statusSnapshot() = statusRegistry.snapshot()

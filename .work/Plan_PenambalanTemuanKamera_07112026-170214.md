@@ -3718,22 +3718,22 @@ Status dicatat `qc`.
 
 ## WP-35 — Terapkan pilihan interface pada server dan UI
 
-Status: todo
+Status: qc
 
 File: `app/src/main/java/dev/ndeso17/camwastegreen/stream/MjpegHttpServer.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`, `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`, `app/src/main/res/values/strings.xml`
 
 Dependensi: WP-12, WP-22, WP-33, WP-34.
 
 Tugas:
-- [ ] T-098 Server menerima alamat bind hasil `resolveBindAddress` dan memakai
+- [x] T-098 Server menerima alamat bind hasil `resolveBindAddress` dan memakai
       konstruktor NanoHTTPD yang menerima hostname; `ALL` tetap `0.0.0.0`.
-- [ ] T-099 Kumpulkan `NetworkCandidate` dari interface aktif di satu tempat,
+- [x] T-099 Kumpulkan `NetworkCandidate` dari interface aktif di satu tempat,
       lalu teruskan ke `resolveBindAddress`; pilihan yang tersimpan dipakai saat
       server start, bukan saat per frame.
-- [ ] T-100 Tambah kontrol pilihan interface (tiga opsi) di panel kontrol beserta
+- [x] T-100 Tambah kontrol pilihan interface (tiga opsi) di panel kontrol beserta
       tombol terapkan; tombol terapkan dinonaktifkan saat streaming berjalan dan
       pesan "hentikan stream untuk mengganti interface" ditampilkan.
-- [ ] T-101 Tampilkan alamat dan URL `/video` sesuai interface yang dipilih,
+- [x] T-101 Tampilkan alamat dan URL `/video` sesuai interface yang dipilih,
       dan tampilkan "interface tidak tersedia" bila `resolveBindAddress`
       mengembalikan `null`.
 
@@ -3749,6 +3749,119 @@ Kriteria terima:
 Risiko: pilihan interface dianggap bukti konektivitas backend.
 Mitigasi: MANUAL-VERIFY hanya mencatat alamat yang tampil dan hasil `curl`
 dari host lain; korespondensi encoder dengan backend tetap `B-24`.
+
+### Log WP-35 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan:
+- `stream/MjpegHttpServer.kt`: konstruktor menerima `val bindAddress: String`
+  dan meneruskannya ke `NanoHTTPD(bindAddress, port)`. Alamat disimpan sebagai
+  properti publik supaya UI dapat melaporkan alamat yang benar-benar dipakai
+  bind, bukan tebakan.
+- `MJPEGServerInstance.kt`: `candidates()` (satu-satunya enumerasi
+  `NetworkInterface`, melewati loopback dan interface tidak `up`),
+  `storedChoice(context)`, `bindAddressFor(choice)`, `getBindAddress()`.
+  `start()` membaca pilihan tersimpan lalu memanggil `bindAddressFor`; bila
+  hasilnya `null`, start ditolak (`false`, state `ERROR`,
+  reason `interface_unavailable`) dan **tidak** melebar ke `0.0.0.0`
+  (D-31/WP-33).
+- `MainActivity.kt`: `groupInterface` (`RadioGroup` 3 opsi),
+  `btnApplyInterface`, `tvInterfaceHint`; `selectedChoice()`,
+  `showStoredChoice()`. Tombol terapkan dan radio group dinonaktifkan saat
+  `isRunning()`; hint berubah sesuai keadaan. `tvIpInfo` memakai
+  `getBindAddress()`: `0.0.0.0` ditampilkan lewat `label_stream_url_all`,
+  alamat spesifik lewat `label_stream_url`. Konstanta lokal `DEFAULT_PORT`
+  dihapus; port teks diambil dari `MJPEGServerInstance.config.port` (WP-22).
+- `res/layout/activity_main.xml`: `RadioGroup` + tombol terapkan + hint di
+  `expandedControls`; tidak ada teks literal (semua `@string/...`).
+- `res/values/strings.xml`: `label_interface`, `interface_all`,
+  `interface_wifi_lan`, `interface_usb_tethering`, `action_apply_interface`,
+  `label_interface_locked`, `label_interface_unavailable`,
+  `label_interface_ready`, `toast_interface_saved`, `label_stream_url_all`.
+
+Deviasi dari rencana: `CameraService.kt` **tidak berubah**. Service hanya
+memanggil `MJPEGServerInstance.start(this, config)`; pembacaan pilihan
+tersimpan dan penolakan interface dilakukan di dalam `start()`, sehingga tidak
+ada baris yang perlu ditambah di service. Batas 5 berkas tetap terpenuhi.
+
+Gerbang (dijalankan 2026-11-08, exit code langsung tanpa pipe):
+
+```
+./gradlew assembleDebug testDebugUnitTest lintDebug > /tmp/opencode/wp35a.log 2>&1
+GATE_EXIT=0
+BUILD SUCCESSFUL in 19s
+```
+
+Lint: 61 warning, 0 error. Sebelum WP-35: 63 warning. `HardcodedText` turun
+14 → 12 (dua teks baru memakai `@string`). Sisa warning lama yang tidak
+disentuh WP ini: `Overdraw`, `SetTextI18n`, dan 12 `HardcodedText` di layout
+lama.
+
+Kriteria grep:
+
+```
+grep -rn "NanoHTTPD(port)" app/src/main/java   -> kosong (exit 1)
+grep -rn "NanoHTTPD(" app/src/main/java/.../stream/MjpegHttpServer.kt
+  42:) : NanoHTTPD(bindAddress, port) {
+```
+
+MANUAL-VERIFY di perangkat `ZP2222SQLL` (moto g57 power, Android 16,
+targetSdk 34), semuanya dicatat apa adanya:
+
+1. Pilihan `ALL` (default, tanpa `stream_settings.xml`):
+   - logcat: `MJPEGServerInstance: Server MJPEG berjalan di 0.0.0.0:8085`.
+   - `curl` via `adb forward` ke `/video` → `http=200 bytes=370635`.
+   - `/status` → `{"streaming":true,...,"width":1440,"height":1440,"clients":0}`.
+2. Pilihan `usb_tethering` saat perangkat tidak punya IPv4 di `usb0`
+   (prefs ditulis paksa, app di-`force-stop` lalu dibuka):
+   - logcat: `MJPEGServerInstance: Interface usb_tethering tidak tersedia; server tidak dimulai`
+     (muncul dua kali: autostart `BootReceiver` dan tombol start).
+   - `curl /status` gagal (exit 52, koneksi tertutup) — sesuai harapan,
+     server memang tidak bind ke `0.0.0.0`.
+3. Pilihan `wifi_lan` dengan Wi-Fi aktif (`BackupHotspot`, `wlan0` =
+   `10.42.0.83/24`):
+   - logcat: `MJPEGServerInstance: Server MJPEG berjalan di 10.42.0.83:8085`.
+   - `/proc/net/tcp6` hanya memuat satu listener port `1F95` dengan alamat
+     `53 002A0A` = `10.42.0.83`; tidak ada listener `0.0.0.0:8085`.
+   - dari host lain (`10.42.0.176`, Wi-Fi yang sama):
+     `curl http://10.42.0.83:8085/video` → `http=200 bytes=474475`,
+     `/status` → `{"streaming":true,...,"clients":1}`.
+
+Tidak terbukti (dicatat sebagai keterbatasan, bukan lulus):
+- **USB tethering nyata belum diuji.** `usb0` ada di `ip link` tetapi tanpa
+  alamat IPv4; `cmd tethering` di perangkat ini menjawab
+  `No shell command implementation`, dan tethering hanya bisa dinyalakan
+  lewat UI sistem yang tidak dapat dikendalikan dari shell. Yang terbukti
+  hanyalah jalur negatif (poin 2).
+- **Kunci tombol terapkan saat streaming belum terbukti secara visual.**
+  `uiautomator dump` di perangkat ini gagal (`ERROR: could not get idle
+  state`), dan `screencap` + `tesseract` hanya terbaca "Tunda Berhenti /
+  Kamera: streaming, 0 klien" — panel kontrol tidak terbaca OCR. Yang dapat
+  dibuktikan hanya lewat kode (`btnApplyInterface.isEnabled = !running`, plus
+  penjaga kedua di listener) dan perilaku fungsional: dengan
+  `interface_choice=wifi_lan` yang sudah tersimpan, server tetap bind ke
+  `10.42.0.83` dan bukan `0.0.0.0`.
+
+Catatan lingkungan: Wi-Fi perangkat semula mati (`wifi_on=0`) dan dinyalakan
+hanya untuk pengujian ini; dikembalikan ke `wifi_on=0` setelah pengujian.
+
+### Log WP-35 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — `resolveBindAddress` dipakai di dalam `MJPEGServerInstance` saja;
+  `MjpegHttpServer` tidak tahu soal `NetworkChoice`, hanya menerima string
+  alamat. Tidak ada enumerasi `NetworkInterface` kedua di jalur server.
+- PASS — penolakan start tidak melebar ke `0.0.0.0`; terverifikasi dari
+  logcat dan dari ketiadaan listener saat pilihan `usb_tethering`.
+- PASS — teks baru seluruhnya `@string/...`; `HardcodedText` tidak bertambah.
+- PASS — tidak ada FPS/latensi karangan di log maupun UI WP ini;
+  `measuredFps` yang dilaporkan berasal dari `StatusRegistry` (QC-47 tetap
+  terbuka).
+- FAIL (lingkup terbatas, sudah dicatat di atas) — MANUAL-VERIFY USB
+  tethering dan kunci tombol terapkan belum terbukti di perangkat. Karena itu
+  status tetap `qc`, tidak dinaikkan ke `done`.
 
 ---
 
