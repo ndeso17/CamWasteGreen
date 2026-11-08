@@ -19,6 +19,7 @@ H.264 (B-30, D-30), pengesahan namespace alias `CWG-` (D-31).
 | 3 | 7 Nov 2026 | Tambah WP-32 (rapikan `README.md`: hapus tabel "Keadaan saat ini" yang cepat basi, arahkan pembaca ke PLAN), revisi T-085 WP-29 agar tidak menggandakan pekerjaan itu, catat urutan eksekusi WP-32 sebelum WP-05 | Temuan QC-17 (WP-03) dan QC-20 (WP-04): tabel keadaan harus diubah ulang pada hampir setiap WP |
 | 4 | 8 Nov 2026 | Tambah WP-33..WP-35 (pilihan interface jaringan untuk jalur streaming: logika murni, penyimpanan SharedPreferences, UI dan bind server). Urutan: WP-33..WP-35 setelah WP-22 dan sebelum WP-23 | Permintaan pengguna sesi 7–8 Nov 2026. Lingkup ini belum punya ID PRD; ID dan penambahan ke `.work/PRD.md` menunggu pengesahan pengguna |
 | 5 | 8 Nov 2026 | Tambah WP-36 (hapus paket `gpuimage`, 16 shader `res/raw`, drawable `bg_filter_chip*`, dan dimens `filter_menu_*`). WP-15 ditutup lebih awal karena kriteria grep `FilterManager`/`FilterType` tidak dapat dipenuhi tanpa menghapus `gpuimage`, sedangkan paket itu di luar daftar berkas WP-15 | Mitigasi tertulis pada WP-15 dan catatan Planner Notes butir 4; temuan QC-37 |
+| 6 | 8 Nov 2026 | Tambah WP-37..WP-40: `Preview` CameraX di service, toggle pratinjau di UI, admin perangkat `force-lock`, tombol matikan layar. Tambah `CWG-17..CWG-19`, `CWG-N07`, MV-15..MV-17 | Permintaan pengguna sesi 8 Nov 2026 (preview on/off; tombol matikan layar dengan stream tetap menyala), D-33 |
 
 Tidak ada WP `done` yang dihapus, dinomori ulang, atau diubah kriterianya.
 WP-01 tetap `done`; revisi ini hanya menambah WP-31 dan memperjelas tugas WP
@@ -4806,6 +4807,339 @@ Temuan:
 
 ---
 
+## WP-37 — `Preview` CameraX dimiliki service, penyedia permukaan dari Activity
+
+Status: qc
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`
+
+Dependensi: WP-18 (kamera di service). Requirement: `CWG-17`, `CWG-N07`. Keputusan: D-33.
+
+Tugas:
+- [x] T-102 Tambah `LocalBinder` pada `CameraService` (`onBind` mengembalikan binder, bukan
+      `null`) yang meneruskan `setPreviewProvider(SurfaceProvider?)` ke instance service.
+- [x] T-103 Di `bindCameraUseCases`, buat use case `Preview` dan ikat bersama `ImageAnalysis` dalam
+      satu panggilan `bindToLifecycle`; simpan referensi untuk perubahan berikutnya.
+      `Preview` memasang `SurfaceProvider` hanya bila Activity sudah memasangnya di service.
+- [x] T-104 `setPreviewProvider(provider)` menyimpan nilai dan memanggil
+      `preview.setSurfaceProvider(provider)`; `provider = null` menghentikan pratinjau tanpa
+      membongkar kamera atau `ImageAnalysis` (CWG-N07).
+- [x] T-105 `ACTION_SWITCH_CAMERA` dan ikat ulang memakai `SurfaceProvider` terakhir; tidak ada
+      jalur yang menyalakan ulang kamera hanya untuk pratinjau.
+
+Kriteria terima:
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` lulus (exit code langsung).
+- `grep -n "bindToLifecycle" app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt`
+  menunjukkan satu panggilan yang memuat `ImageAnalysis` dan `Preview` bersama.
+- Tidak ada pemanggilan `FrameEncoder` baru dan tidak ada `compressToJpeg` tambahan
+  (CWG-N01, CWG-N07): `grep -rn "compressToJpeg" app/src/main/java` tetap 1.
+- Bukti di Log WP-37.
+
+Risiko: `Preview` menambah satu aliran kamera, sehingga FPS `ImageAnalysis` pada perangkat
+dapat turun. Mitigasi: MV-15 mengukur `measuredFps` dengan pratinjau nyala dan mati; angka
+tidak dipakai sebagai ambang lulus (B-06 tetap terbuka).
+
+## WP-38 — Pratinjau di layar dengan tombol nyala/mati
+
+Status: qc
+
+File: `app/src/main/res/layout/activity_main.xml`, `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/values/strings.xml`, `app/src/main/res/drawable/ic_preview_on.xml`, `app/src/main/res/drawable/ic_preview_off.xml`
+
+Dependensi: WP-37. Requirement: `CWG-17`.
+
+Tugas:
+- [x] T-106 Ganti isi `previewPlaceholder` menjadi `PreviewView` penuh layar plus hamparan
+      status yang hanya tampil saat pratinjau mati atau stream berhenti.
+- [x] T-107 Activity mengikat `CameraService` (`bindService` tanpa `BIND_AUTO_CREATE`) saat
+      `onStart` dan melepasnya saat `onStop`; `onServiceConnected` memasang
+      `previewView.surfaceProvider` lewat binder. Bila service belum berjalan, tidak ada
+      pratinjau dan hamparan menampilkan "Stream belum berjalan".
+- [x] T-108 Tombol `btnTogglePreview` di bilah status membalik keadaan pratinjau, memanggil
+      binder dengan `previewView.surfaceProvider` atau `null`, dan mengganti ikon serta
+      `contentDescription`. Keadaan awal Activity: nyala (D-33).
+- [x] T-109 Saat `onStop`, Activity memasang `null` supaya permukaan mati tidak ditahan; saat
+      `onStart` kembali, pratinjau dinyalakan lagi.
+- [x] T-110 Semua teks dan `contentDescription` baru memakai `@string/...`.
+
+Kriteria terima:
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` lulus.
+- `grep -n "surfaceProvider" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`
+  menunjukkan satu jalur pasang dan satu jalur lepas.
+- Tidak ada teks UI literal baru: `git diff` pada layout dan `MainActivity.kt` tidak memuat
+  `android:text="` baru tanpa `@string/`.
+- Bukti di Log WP-38 dan MV-15.
+
+Risiko: `PreviewView` bekerja meski kamera terikat ke lifecycle service, bukan lifecycle
+Activity; bila permukaan dilepas saat `onStop` tanpa memasang ulang, pratinjau tidak kembali.
+Mitigasi: pasang ulang di `onServiceConnected` dan pada setiap `onStart`.
+
+## WP-39 — Admin perangkat `force-lock` untuk mematikan layar
+
+Status: qc
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/ScreenLockAdminReceiver.kt`, `app/src/main/res/xml/device_admin.xml`, `app/src/main/AndroidManifest.xml`
+
+Dependensi: tidak ada. Requirement: `CWG-18`, `CWG-19`.
+
+Tugas:
+- [x] T-111 Tambah `ScreenLockAdminReceiver : DeviceAdminReceiver` dengan log pada
+      `onEnabled`/`onDisabled`; tidak ada logika lain dan tidak ada permintaan izin.
+- [x] T-112 Tambah `res/xml/device_admin.xml` dengan satu kebijakan `force-lock` saja.
+- [x] T-113 Daftarkan receiver di manifest dengan `android:permission="android.permission.BIND_DEVICE_ADMIN"`,
+      `android:exported="true"`, `meta-data android.app.device_admin`, dan intent-filter
+      `android.app.action.DEVICE_ADMIN_ENABLED`.
+
+Kriteria terima:
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` lulus.
+- `grep -n "BIND_DEVICE_ADMIN" app/src/main/AndroidManifest.xml` ada; `device_admin.xml`
+  hanya memuat `force-lock` dan tidak memuat `wipe-data`/`reset-password`.
+- Bukti di Log WP-39.
+
+Risiko: receiver diekspor sehingga aplikasi lain dapat memicunya. Mitigasi: izin
+`BIND_DEVICE_ADMIN` hanya dipegang sistem; receiver tidak melakukan aksi atas broadcast.
+
+## WP-40 — Tombol matikan layar dan aktivasi admin
+
+Status: qc
+
+File: `app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt`, `app/src/main/res/layout/activity_main.xml`, `app/src/main/res/values/strings.xml`, `app/src/main/res/drawable/ic_screen_off.xml`
+
+Dependensi: WP-39, WP-38. Requirement: `CWG-18`, `CWG-19`.
+
+Tugas:
+- [x] T-114 Tambah `btnScreenOff` di bilah status; aktif hanya saat stream berjalan (sama seperti
+      kontrol lain).
+- [x] T-115 Saat admin belum aktif, tombol membuka `ACTION_ADD_DEVICE_ADMIN` dengan
+      `EXTRA_DEVICE_ADMIN` dan `EXTRA_ADD_EXPLANATION`; tidak ada `lockNow` yang dicoba dan
+      tidak ada aktivasi diam-diam saat aplikasi dibuka (CWG-19).
+- [x] T-116 Saat admin aktif tetapi perangkat belum punya kunci layar
+      (`KeyguardManager.isDeviceSecure` bernilai `false`), tampilkan pesan bahwa PIN/pattern
+      perlu diatur; jangan klaim layar dimatikan.
+- [x] T-117 Saat admin aktif dan kunci layar ada, panggil `DevicePolicyManager.lockNow()` di dalam
+      `try/catch` `SecurityException`; kegagalan dilaporkan sebagai pesan, bukan crash.
+- [x] T-118 Semua teks baru masuk `strings.xml`; tidak ada teks literal di layout atau kode.
+
+Kriteria terima:
+- `./gradlew assembleDebug testDebugUnitTest lintDebug` lulus.
+- `grep -n "lockNow" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt` ada satu
+  pemanggilan, dan `grep -n "ACTION_ADD_DEVICE_ADMIN"` ada satu pemanggilan.
+- `grep -rn "wipeData\|resetPassword\|setPassword" app/src/main/java` kosong.
+- Bukti di Log WP-40; perilaku pada perangkat adalah MV-16 dan tetap `BELUM DIUJI` sampai
+  ada tangkapan layar terkunci + `/video` sesudahnya.
+
+Risiko: aktivasi admin adalah tindakan yang terlihat oleh pengguna dan dapat dicabut.
+Mitigasi: hanya `force-lock`, penjelasan ditampilkan pada layar konfirmasi sistem, dan
+tidak ada kebijakan lain yang diminta.
+
+### Log WP-37 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan (satu berkas):
+- `CameraService.kt`: `onBind` sekarang mengembalikan `PreviewBinder` (bukan `null`).
+  Binder punya satu metode `setPreviewProvider(Preview.SurfaceProvider?)` yang
+  memindahkan pekerjaan ke main thread lewat `handler.post`, karena CameraX
+  memanggil `Threads.checkMainThread()` di dalam `Preview.setSurfaceProvider`
+  sedangkan pemanggilan binder datang di thread binder.
+- `bindCameraUseCases` membuat use case `Preview` dengan `ResolutionSelector`
+  yang sama dan mengikatnya bersama `ImageAnalysis` dalam satu
+  `bindToLifecycle`, sehingga tidak ada ikatan kamera kedua.
+- `preview` disimpan sebagai field; `stopCamera()` mengosongkannya.
+
+Kriteria grep:
+
+```
+grep -n "bindToLifecycle" app/src/main/java/dev/ndeso17/camwastegreen/CameraService.kt
+395: boundCamera = provider.bindToLifecycle(this, cameraSelector, imageAnalysis, previewUseCase)
+grep -rn "compressToJpeg" app/src/main/java | wc -l
+1
+```
+
+Gerbang (2026-11-08, exit code langsung tanpa pipe):
+
+```
+./gradlew assembleDebug testDebugUnitTest lintDebug > /tmp/opencode/wp37.log 2>&1
+GATE_EXIT=0
+BUILD SUCCESSFUL in 2m 23s
+```
+
+Catatan lingkungan: preflight pertama `STOP` (RAM tersedia 0,8 GiB). Satu
+daemon Gradle dihentikan dengan `./gradlew --stop`; preflight ulang `OK`
+(RAM tersedia 2,7 GiB). Build sempat memunculkan "The daemon has terminated
+unexpectedly on startup attempt #1" lalu berhasil pada percobaan berikutnya.
+
+Yang tidak terbukti: pratinjau belum dilihat pada perangkat. Biaya `Preview`
+adalah satu aliran kamera tambahan di samping `ImageAnalysis`. Dampaknya ke
+FPS terukur diukur pada MV-15, bukan diklaim sekarang.
+
+### Log WP-37 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — `Preview` terikat dalam satu `bindToLifecycle` bersama
+  `ImageAnalysis`; tidak ada kamera kedua yang dibuka.
+- PASS — jalur JPEG tidak berubah; `compressToJpeg` tetap satu.
+- PASS — `setSurfaceProvider` dipanggil di main thread.
+- CATATAN — `Preview` memakai `ResolutionSelector` yang sama dengan
+  `ImageAnalysis`; `Preview` kemudian mengambil resolusi terdekat dari
+  `ResolutionSelector`. Dampak ke FPS terukur belum diukur (MV-15).
+
+### Log WP-38 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan:
+- `res/layout/activity_main.xml`: `previewPlaceholder` (panel hitam dengan
+  teks) diganti dua lapis: `PreviewView` (`previewView`, `fillCenter`,
+  awal `gone`) dan hamparan `previewOverlay` (`match_parent`, hitam,
+  `center`) yang memuat `tvCameraState` dan `tvPreviewHint`. Bilah status
+  mendapat tombol `btnTogglePreview` (`ImageButton` 40dp, ikon
+  `ic_preview_on`/`ic_preview_off`).
+- `MainActivity.kt`: `bindService(Intent(this, CameraService::class.java),
+  serviceConnection, 0)` pada `onStart` (tanpa `BIND_AUTO_CREATE`, jadi
+  Activity tidak menyalakan service), `unbindService` pada `onStop` dengan
+  flag `serviceBound`. `onServiceConnected` menyimpan
+  `CameraService.PreviewBinder` lalu memanggil `applyPreviewState()`;
+  `onServiceDisconnected` membersihkan binder. `applyPreviewState()`
+  memasang `previewView.surfaceProvider` saat pratinjau nyala dan `null`
+  saat mati. `updateUI()` mengatur visibilitas `previewView`/`previewOverlay`
+  dan ikon tombol.
+- `res/values/strings.xml`: `label_preview_hint` diganti
+  `label_stream_not_running` dan `label_preview_off`; ditambah
+  `cd_toggle_preview`.
+- `res/drawable/ic_preview_on.xml`, `ic_preview_off.xml`: ikon vektor
+  `visibility` dan `visibility_off`.
+
+Kriteria grep:
+
+```
+grep -n "surfaceProvider" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt
+381:        binder.setPreviewProvider(if (previewEnabled) previewView.surfaceProvider else null)
+git diff -U0 app/src/main/res/layout/activity_main.xml | grep '^+' | grep 'text='
++            android:text="@string/label_stream_not_running"
+```
+
+Gerbang (2026-11-08, exit code langsung tanpa pipe):
+
+```
+./gradlew assembleDebug testDebugUnitTest lintDebug > /tmp/opencode/wp38.log 2>&1
+GATE_EXIT=0
+BUILD SUCCESSFUL in 1m 23s
+```
+
+Perbaikan saat pengerjaan: penyuntingan pertama menghapus baris
+`sheetBehavior.state =` dari listener `btnMinimize`; baris itu dikembalikan
+sebelum gerbang dijalankan.
+
+Tidak terbukti: pratinjau belum dilihat pada perangkat nyata (MV-15). Status
+tetap `qc`.
+
+### Log WP-38 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — pratinjau tidak menambah jalur enkode; `Preview` dan `ImageAnalysis`
+  terikat sekali.
+- PASS — pratinjau mati hanya memasang `null` pada permukaan; kamera dan
+  server tidak disentuh.
+- PASS — teks baru seluruhnya `@string/...`; `HardcodedText` tidak bertambah.
+- CATATAN — `bindService` dengan flag `0` tidak menyalakan service; Activity
+  yang butuh status stream tetap bergantung pada `MJPEGServerInstance`.
+
+### Log WP-39 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan:
+- `ScreenLockAdminReceiver.kt` (baru): `DeviceAdminReceiver` dengan
+  `onEnabled`/`onDisabled` hanya mencatat log. Tidak ada izin yang diminta,
+  tidak ada aksi atas broadcast.
+- `res/xml/device_admin.xml` (baru): satu kebijakan `<force-lock />`.
+- `AndroidManifest.xml`: receiver didaftarkan dengan
+  `android:permission="android.permission.BIND_DEVICE_ADMIN"`,
+  `android:exported="true"`, `meta-data android.app.device_admin`, dan
+  intent-filter `android.app.action.DEVICE_ADMIN_ENABLED`.
+
+Kriteria grep:
+
+```
+grep -n "BIND_DEVICE_ADMIN" app/src/main/AndroidManifest.xml
+71:            android:permission="android.permission.BIND_DEVICE_ADMIN"
+grep -n "force-lock\|wipe\|password" app/src/main/res/xml/device_admin.xml
+9:        <force-lock />
+```
+
+Gerbang (2026-11-08, exit code langsung tanpa pipe):
+
+```
+./gradlew assembleDebug testDebugUnitTest lintDebug > /tmp/opencode/wp39.log 2>&1
+GATE_EXIT=0
+BUILD SUCCESSFUL in 33s
+```
+
+Tidak terbukti: aktivasi admin pada perangkat belum diuji (MV-17).
+
+### Log WP-39 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — hanya `force-lock`; tidak ada `wipe-data`, `reset-password`, atau
+  `expire-password`.
+- PASS — receiver tidak melakukan aksi atas broadcast yang diterimanya.
+- CATATAN — `exported="true"` diperlukan sistem; tanpa izin
+  `BIND_DEVICE_ADMIN` aplikasi lain tidak dapat mengirim broadcast ke
+  receiver ini.
+
+### Log WP-40 (Executor)
+
+Tanggal: 2026-11-08. Status setelah kerja: `qc`.
+
+Perubahan:
+- `res/drawable/ic_screen_off.xml` (baru): ikon vektor `power_settings_new`.
+- `res/layout/activity_main.xml`: tombol `btnScreenOff` di bilah status,
+  sebelum tombol pratinjau.
+- `res/values/strings.xml`: `device_admin_explanation`,
+  `toast_set_screen_lock`, `toast_lock_failed`, `toast_screen_locked`.
+- `MainActivity.kt`: `requestScreenOff()` memeriksa tiga keadaan berurutan —
+  admin belum aktif (buka `ACTION_ADD_DEVICE_ADMIN` dengan
+  `EXTRA_DEVICE_ADMIN` dan `EXTRA_ADD_EXPLANATION`), kunci layar belum ada
+  (`KeyguardManager.isDeviceSecure == false` → pesan, bukan klaim berhasil),
+  lalu `lockNow()` di dalam `try/catch SecurityException`. Tombol aktif hanya
+  saat stream berjalan, sama seperti kontrol lain.
+
+Kriteria grep:
+
+```
+grep -n "lockNow" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt
+429:            dpm.lockNow()
+grep -n "ACTION_ADD_DEVICE_ADMIN" app/src/main/java/dev/ndeso17/camwastegreen/MainActivity.kt
+407:                    Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+grep -rn "wipeData\|resetPassword\|setPassword" app/src/main/java   # kosong
+```
+
+Gerbang (2026-11-08, exit code langsung tanpa pipe):
+
+```
+./gradlew assembleDebug testDebugUnitTest lintDebug > /tmp/opencode/wp40.log 2>&1
+GATE_EXIT=0
+BUILD SUCCESSFUL in 41s
+```
+
+Tidak terbukti: `lockNow` pada perangkat dan kelangsungan `/video` sesudah
+layar mati (MV-16), serta aktivasi admin lewat konfirmasi sistem (MV-17).
+Keduanya `BELUM DIUJI` sampai ada bukti perangkat.
+
+### Log WP-40 (QC)
+
+Pemeriksaan sendiri (bukan QC independen):
+
+- PASS — tidak ada aktivasi admin saat aplikasi dibuka; hanya pada klik
+  tombol.
+- PASS — `.lockNow()` satu pemanggilan, dibungkus `try/catch`.
+- PASS — teks baru seluruhnya `@string/...`.
+- CATATAN — tombol dinonaktifkan saat stream berhenti, jadi "matikan layar"
+  tidak menawarkan aksi yang tidak berguna saat tidak ada stream.
+
 ## Traceability Matrix
 
 ### Temuan audit → WP
@@ -4873,6 +5207,9 @@ Seluruh butir berikut **belum diuji**; tidak ada perangkat pada sesi ini.
 8. Penolakan `401` tanpa token dan penerimaan dengan token benar (WP-27).
 9. Tidak ada permintaan izin mikrofon saat aplikasi dibuka (WP-05).
 10. Nilai eksposur tidak berubah antara dua sesi pengambilan (WP-24).
+11. Pratinjau nyala/mati tidak menghentikan `/video`; `measuredFps` dicatat dengan keduanya (WP-37, WP-38). MV-15.
+12. Tombol matikan layar: layar terkunci, lalu `/video` tetap `200` dan `X-Frame-Seq` naik (WP-39, WP-40). MV-16.
+13. Aktivasi admin hanya lewat konfirmasi sistem saat tombol pertama ditekan; tidak ada permintaan saat aplikasi dibuka (WP-40). MV-17.
 
 ## Blockers
 

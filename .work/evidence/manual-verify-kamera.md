@@ -381,6 +381,9 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 | MV-12 | `TERUJI-SESUAI` | `MISSING_KEY`/`WRONG_KEY` → 401, token benar → 200 |
 | MV-13 | `TERUJI-SESUAI` | 8 Nov 2026, APK 1036 dengan `allowedAddresses=127.0.0.1`: `/status` dari `127.0.0.1` dengan token benar → `200`, tanpa token → `401`; `ADDRESS_NOT_ALLOWED` dari APK 0947 tetap berlaku |
 | MV-14 | `BELUM DIUJI` | parsial: tombol terkunci saat streaming (tangkapan `mv14-interface-locked-20261108.png`); listener `::` untuk "semua"; USB tethering nyata belum |
+| MV-15 | `TERUJI-SESUAI` | 8 Nov 2026, APK bertoken 1230 di `ZP2222SQLL`: pratinjau nyala (rata-rata piksel 69,4) → mati (10,7, teks "Pratinjau dimatikan. Stream tetap berjalan.") → nyala (69,9); `/status` `streaming:true`, `frameSeq` 44 → 751 → 793; `measuredFps` dicatat, bukan ambang |
+| MV-16 | `TERUJI-SESUAI` | 8 Nov 2026, `ZP2222SQLL`, APK 1246. Tap `btnScreenOff` (`813 181`) saat layar `Awake`: log `IPCam.MainActivity: lockNow dipanggil: admin aktif, kunci layar tersedia.` (12:48:10.205), lalu `mWakefulness=Dozing`, `mAwake=false`, `mScreenOnFully=false`, `isKeyguardShowing=true`; `/status` `streaming:true` (`frameSeq` 97) dan `/video` `200` (`mv16b-frame.jpg`). Uji 12:41 sebelumnya (APK 1230) menunjukkan hasil layar sama tanpa baris log; uji itu tidak dipakai sebagai bukti utama. Tap `830 179` sempat tidak mengenai tombol dan `862 182` jatuh di celah antar-chip; keduanya dibuang |
+| MV-17 | `TERUJI-SESUAI` | 8 Nov 2026: admin sudah aktif (`Enabled Device Admins` memuat `ScreenLockAdminReceiver` dengan `force-lock`); tidak ada permintaan admin saat aplikasi dibuka. Alur aktivasi dari nol belum diuji karena admin sudah ada sebelumnya |
 
 Butir `TERUJI-SESUAI` hanya berlaku untuk perangkat `ZP2222SQLL` pada
 8 November 2026 dengan APK uji. Butir itu **tidak** menetapkan ambang mutu:

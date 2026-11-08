@@ -48,7 +48,8 @@ Aplikasi **tidak** menjalankan inferensi model, **tidak** memilih target, dan
 | Kamera | Capture frame, orientasi tetap, kunci eksposur, resolusi/FPS terkonfigurasi |
 | Stream | Server MJPEG multipart dengan header metadata per frame |
 | Kesehatan | Umur frame, nomor urut, FPS terukur, jumlah klien, status kamera |
-| Operation | Foreground service, kamera tetap hidup saat app di background |
+| Pratinjau | Tampilan kamera di layar operator yang dapat dinyalakan/dimatikan tanpa menghentikan stream |
+| Operation | Foreground service, kamera tetap hidup saat app di background, tombol matikan layar lewat admin perangkat |
 | Keamanan | Batas akses jaringan sesuai keputusan otorisasi |
 | Diagnostik | Endpoint status dan log yang bisa dibaca backend |
 
@@ -89,6 +90,9 @@ baru; perubahan bentuk wajib dicatat di `.work/DECISIONS.md` root.
 | CWG-14 | Aplikasi tidak meminta izin mikrofon | `RECORD_AUDIO` tidak ada di manifest |
 | CWG-15 | Server hanya menerima koneksi sesuai keputusan akses jaringan | Permintaan dari sumber yang tidak diizinkan ditolak |
 | CWG-16 | Kegagalan streaming tidak boleh mengubah status frame menjadi sehat | Status degraded disertai alasannya |
+| CWG-17 | Layar operator dapat menampilkan pratinjau kamera dan pratinjau itu dapat dimatikan/dinyalakan tanpa menghentikan stream | Saat pratinjau dimatikan, `/video` tetap melayani frame dengan `X-Frame-Seq` yang naik; saat dinyalakan, `PreviewView` menampilkan bingkai dari kamera yang sama |
+| CWG-18 | Tombol "Matikan layar" mematikan layar perangkat tanpa menghentikan stream | Setelah tombol ditekan, layar terkunci dan `/video` masih melayani frame. Layar mati bukan bukti kamera tetap hidup bila server tidak diuji sesudahnya |
+| CWG-19 | Hak admin perangkat hanya diminta saat operator menekan tombol matikan layar pertama kali, dan hanya untuk kebijakan `force-lock` | Saat aplikasi dibuka, tidak ada permintaan hak admin; tanpa admin aktif, tombol menjelaskan aktivasi dan tidak mengunci apa pun |
 
 ### 4.3 Nonfungsional
 
@@ -100,6 +104,7 @@ baru; perubahan bentuk wajib dicatat di `.work/DECISIONS.md` root.
 | CWG-N04 | Waktu pada header frame adalah waktu pengambilan perangkat dalam epoch ms |
 | CWG-N05 | Tidak ada angka FPS, latensi, atau bandwidth yang dikarang; nilai berasal dari pengukuran |
 | CWG-N06 | Build, unit test, dan lint wajib lulus sebelum perubahan dianggap selesai |
+| CWG-N07 | Pratinjau layar tidak boleh menambah enkode JPEG kedua atau memakai ulang JPEG hasil stream; pratinjau memakai jalur `Preview` CameraX yang terpisah dari `ImageAnalysis` |
 
 ## 5. Kontrak stream
 
@@ -143,6 +148,8 @@ token dapat dibaca bila jaringan disadap; TLS di luar lingkup v1.
 | Izin mikrofon | Tidak ada permintaan izin mikrofon |
 | Akses dari sumber tidak diizinkan | Ditolak dengan alasan |
 | Dua frame berturut-turut | `X-Frame-Seq` berbeda; tidak ada frame duplikat |
+| Pratinjau dimatikan saat stream berjalan | `/video` tetap melayani frame; layar berhenti menampilkan bingkai |
+| Tombol matikan layar ditekan saat streaming | Layar terkunci; `/video` tetap melayani frame setelahnya |
 
 ## 7. Traceability
 
