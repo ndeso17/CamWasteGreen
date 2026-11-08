@@ -2772,6 +2772,50 @@ Pemeriksaan sendiri (bukan QC independen):
   menyelesaikan seluruh WP tanpa bertanya; pengguna dapat meninjau ulang
   pilihan itu tanpa mengubah kode selain `BootReceiver`.
 
+### Log WP-19 (Executor) — bukti MV-03 pada perangkat, 8 November 2026
+
+Perangkat `ZP2222SQLL` kembali terdeteksi. APK `c08e354` (build dengan
+`BootReceiver` bentuk D-32) sudah terpasang, izin `CAMERA` dan
+`POST_NOTIFICATIONS` diberikan lewat `pm grant`, lalu `adb reboot` dijalankan
+dan perangkat dibiarkan tanpa dibuka selama ±2 menit.
+
+Hasil yang terbaca:
+
+```text
+dumpsys notification --noredact
+  NotificationRecord(... pkg=dev.ndeso17.camwastegreen id=1002 tag=null
+    importance=3 key=0|dev.ndeso17.camwastegreen|1002|null|10458
+    channel=boot_reminder ... flags=AUTO_CANCEL category=reminder)
+  effectiveNotificationChannel=NotificationChannel{mId='boot_reminder',
+    mName=Pengingat setelah boot, mImportance=3 ...}
+  contentIntent=PendingIntentRecord{... startActivity ...}
+
+logcat -b main: "Posting BOOT_COMPLETED user #0" 09:28:53
+logcat -b events: am_proc_start [... reason=broadcast ...] untuk proses lain
+ps -A                          -> tidak ada dev.ndeso17.camwastegreen
+dumpsys activity services      -> (nothing)
+```
+
+Tangkapan baki notifikasi (OCR) membaca `Kamera belum menyala - 2 m` dan
+`Android tidak mengizinkan kamera dinyalakan otomatis s...`; berkasnya
+`.work/evidence/mv03-shade-20261108.png` (commit `197c343`).
+
+Jadi, pada perangkat ini: notifikasi pengingat **muncul** dan kamera
+**tidak** berjalan sampai operator menekan mulai. `MV-03` naik ke
+`TERUJI-SESUAI`.
+
+Keterbatasan yang harus dibaca bersama hasil ini:
+- Baris log `IPCam.BootReceiver` tidak lagi ada di buffer (sudah berputar),
+  jadi bukti bersandar pada `dumpsys notification`, waktu `when`
+  (`1794105059361`, ≈2 menit setelah `BOOT_COMPLETED`), dan tangkapan layar —
+  bukan pada log aplikasi sendiri.
+- Notifikasi belum pernah dibuka operator; `PendingIntent` ke `MainActivity`
+  belum dibuktikan bekerja dari notifikasi itu.
+- `POST_NOTIFICATIONS` diberikan lewat `pm grant`, bukan lewat dialog izin.
+  Bila izin dicabut pengguna, receiver hanya menulis satu baris log; jalur itu
+  belum diuji.
+- Status WP tetap `qc`; menaikkan ke `done` memerlukan QC independen.
+
 ---
 
 ## WP-20 — Orientasi tetap dan hapus izin yang tidak dipakai
@@ -3916,6 +3960,56 @@ Pemeriksaan sendiri (bukan QC independen):
   ditandai sebagai hasil satu perangkat.
 - CATATAN — butir MV-03 bergantung pada B-31 yang masih terbuka; hal itu
   dinyatakan di dalam butir, bukan disembunyikan.
+
+### Log WP-30 (Executor) — hasil uji perangkat, 8 November 2026
+
+Perangkat `ZP2222SQLL` (moto g57 power, Android 16, targetSdk 34) kembali
+terdeteksi. APK uji dibangun dengan `camwastegreen.apiKey` di
+`local.properties` (token uji, tidak masuk repo) dan dipasang ulang. Berkas
+`.work/evidence/manual-verify-kamera.md` diisi hasil apa adanya.
+
+Butir yang berubah dari `BELUM DIUJI` menjadi `TERUJI-SESUAI`:
+
+| Butir | Bukti ringkas |
+|---|---|
+| MV-01 | `KEYCODE_SLEEP` → `mWakefulness=Dozing`; 60 detik kemudian `/video` `HTTP=200`, 1932032 byte; `dumpsys activity services` → `isForeground=true foregroundId=1001 types=0x00000040` |
+| MV-02 | `topResumedActivity` = launcher; `/status` tetap `streaming:true`, `frameSeq` 244 → 768 |
+| MV-03 | `dumpsys notification` → `id=1002 channel=boot_reminder category=reminder flags=AUTO_CANCEL`; `ps -A` tanpa proses aplikasi; tangkapan baki notifikasi |
+| MV-04 | dua `curl /video` bersamaan → `/status` `clients:2` |
+| MV-05 | klien ketiga → `HTTP=503` "Batas 2 klien tercapai" |
+| MV-11 | `/status` dan JPEG `/video` sama-sama 720x1280 |
+| MV-12 | tanpa header → `401 MISSING_KEY`; token salah → `401 WRONG_KEY`; token benar → `200` |
+
+Butir yang tetap `BELUM DIUJI` beserta hasil parsialnya:
+
+| Butir | Hasil parsial | Yang belum |
+|---|---|---|
+| MV-06 | `/status` tetap 200 dengan tanggap 15–25 ms selama klien `--limit-rate 2k` | pemutusan oleh server, bukan oleh `curl` |
+| MV-07 | `measuredFps` 3,22–3,50 pada 720x1280 target 20, ±3 menit | durasi 5 menit, suhu perangkat |
+| MV-09 | `tuningState:"locked"` konsisten | perbandingan warna antar bingkai |
+| MV-13 | APK dengan `allowedAddresses=10.99.99.99` menolak `127.0.0.1` dengan `401 ADDRESS_NOT_ALLOWED` | sisi terima dari alamat terdaftar |
+
+Belum dijalankan sama sekali: MV-08 (bandwidth) dan MV-10 (butuh dudukan
+sebenarnya).
+
+Catatan penting:
+- Angka FPS 3,2–3,5 **bukan** ambang dan tidak menutup `B-06`. Angka itu juga
+  berbeda dari QC-47 (1,6–1,8) pada uji sebelumnya; selisih ini tidak
+  dijelaskan oleh data yang ada.
+- `local.properties` sudah dikembalikan ke `sdk.dir` saja. Dua APK uji
+  bertoken yang dibuat (0935 dan 0947) tetap ada di `app/build/outputs/` dan
+  tidak di-commit; APK 0935 terpasang kembali di perangkat setelah uji MV-13.
+- Uji MV-13 memakai `allowedAddresses` sempit; APK 0947 juga memuat token uji,
+  jadi tidak boleh disebarkan.
+- Kamera pada perangkat uji menolak start pada beberapa percobaan setelah APK
+  dipasang ulang (layar tetap "Server berhenti", `/status` tidak menjawab)
+  sampai tombol shutter ditekan ulang setelah layar dibangunkan. Perilaku itu
+  belum diselidiki dan tidak diklaim sebagai normal.
+
+Kriteria terima WP-30 versi awal ("semuanya `BELUM DIUJI`") **tidak lagi**
+berlaku setelah uji ini; yang menggantikannya: setiap butir punya status sah
+dan butir `TERUJI-SESUAI` wajib memuat hasil di dalam butir itu.
+
 
 ---
 
