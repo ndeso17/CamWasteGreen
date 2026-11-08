@@ -8,6 +8,7 @@ import dev.ndeso17.camwastegreen.stream.FrameSource
 import dev.ndeso17.camwastegreen.stream.MjpegHttpServer
 import dev.ndeso17.camwastegreen.stream.NetworkCandidate
 import dev.ndeso17.camwastegreen.stream.NetworkChoice
+import dev.ndeso17.camwastegreen.stream.SessionToken
 import dev.ndeso17.camwastegreen.stream.StatusRegistry
 import dev.ndeso17.camwastegreen.stream.StreamInterfacePrefs
 import dev.ndeso17.camwastegreen.stream.resolveBindAddress
@@ -44,6 +45,10 @@ object MJPEGServerInstance {
 
     @Volatile
     private var server: MjpegHttpServer? = null
+
+    /** Token sesi berjalan; diganti setiap start, tidak pernah ditulis ke disk. */
+    @Volatile
+    private var currentApiKey: String? = null
 
     /**
      * Kandidat alamat IPv4 dari interface yang aktif sekarang.
@@ -111,10 +116,10 @@ object MJPEGServerInstance {
             return true
         }
 
-        // Token: nilai pada CameraConfig bila diisi pemanggil, selain itu dari
-        // BuildConfig (dibangun dari local.properties, WP-26). Tidak ada
-        // token yang ditulis di repo ini.
-        val apiKey = config.apiKey.ifEmpty { BuildConfig.API_KEY }
+        // Token dibuat acak setiap kali server dimulai (tidak tersimpan dan tidak
+        // ada di APK). Ditampilkan di layar agar operator memasukkannya ke klien.
+        val apiKey = config.apiKey.ifEmpty { SessionToken.generate() }
+        currentApiKey = apiKey
 
         val choice = storedChoice(context)
         val bindAddress = bindAddressFor(choice)
@@ -138,10 +143,6 @@ object MJPEGServerInstance {
             created.start(SOCKET_READ_TIMEOUT_MS, true)
             server = created
             statusRegistry.setCameraState(StatusRegistry.CameraState.STARTING)
-            if (apiKey.isEmpty()) {
-                // Tanpa token, ApiAuth menolak semua permintaan terjaga.
-                Log.w(TAG, "Token API kosong: /video dan /status akan menolak semua permintaan")
-            }
             Log.i(TAG, "Server MJPEG berjalan di $bindAddress:$port")
             true
         } catch (e: Exception) {
@@ -191,6 +192,7 @@ object MJPEGServerInstance {
             Log.e(TAG, "Gagal menghentikan server: ${e.message}", e)
         } finally {
             server = null
+            currentApiKey = null
             frameSource.clear()
             statusRegistry.resetFrames()
             statusRegistry.setCameraState(StatusRegistry.CameraState.STOPPED)
@@ -199,6 +201,12 @@ object MJPEGServerInstance {
 
     /** Apakah server sedang berjalan. */
     fun isRunning(): Boolean = server != null
+
+    /**
+     * Token `X-Api-Key` pada sesi server yang sedang berjalan, atau `null` bila
+     * server tidak berjalan. Dibuat ulang setiap kali server dimulai.
+     */
+    fun getApiKey(): String? = if (server != null) currentApiKey else null
 
     /** Port aktif, atau `null` bila server tidak berjalan. */
     fun getPort(): Int? = server?.listeningPort

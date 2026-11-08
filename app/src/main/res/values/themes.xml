@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.IPCam" parent="Theme.Material3.DayNight.NoActionBar">
@@ -6,4 +7,7 @@
     </style>
 
     <style name="Theme.IPCam" parent="Base.Theme.IPCam" />
+
+    <!-- Tema aplikasi untuk API di bawah 31 (splash sistem belum tersedia). -->
+    <style name="Theme.CamWasteGreen" parent="Theme.AppCompat.Light.NoActionBar" />
 </resources>

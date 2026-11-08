@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ikon layar splash Android 12+.
+
+    Sistem memotong ikon splash menjadi lingkaran, sehingga ikon foreground
+    launcher (logo dengan tepi tidak beraturan) tampak "tidak beraturan" saat
+    dipotong. Di sini ikon dilapisi bulatan hijau yang warnanya sama dengan
+    background splash, jadi tepi potongan tidak lagi terlihat dan yang tampak
+    hanya logo di tengah.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_splash_circle" />
+    <item android:drawable="@mipmap/ic_launcher_foreground" />
+</layer-list>

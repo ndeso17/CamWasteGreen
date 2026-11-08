@@ -9,4 +9,5 @@
     <color name="surface_dark">#F2141414</color>
     <color name="chip_bg">#CC1A1A1A</color>
     <color name="text_secondary">#B3FFFFFF</color>
+    <color name="launcher_green">#3AE686</color>
 </resources>

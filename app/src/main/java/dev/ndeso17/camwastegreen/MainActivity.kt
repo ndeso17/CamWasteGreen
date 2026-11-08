@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvFpsInfo: TextView
     private lateinit var tvQualityInfo: TextView
     private lateinit var tvIpInfo: TextView
+    private lateinit var tvApiKey: TextView
     private lateinit var tvFpsValue: TextView
     private lateinit var tvQualityValue: TextView
     private lateinit var btnRecordBg: View
@@ -161,6 +162,7 @@ class MainActivity : AppCompatActivity() {
         tvFpsInfo = findViewById(R.id.tvFpsInfo)
         tvQualityInfo = findViewById(R.id.tvQualityInfo)
         tvIpInfo = findViewById(R.id.tvIpInfo)
+        tvApiKey = findViewById(R.id.tvApiKey)
         tvFpsValue = findViewById(R.id.tvFpsValue)
         tvQualityValue = findViewById(R.id.tvQualityValue)
         btnRecordBg = findViewById(R.id.btnRecordBg)
@@ -338,6 +340,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.label_server_stopped)
         }
+
+        tvApiKey.text = MJPEGServerInstance.getApiKey()?.let {
+            getString(R.string.label_api_key, it)
+        } ?: getString(R.string.label_api_key_none)
 
         tvUsbStatus.text = getUsbTetheringIp()
 

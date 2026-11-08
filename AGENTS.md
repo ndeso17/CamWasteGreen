@@ -31,7 +31,7 @@ path and their code is gone from this repo.
 
 Blocker yang sudah selesai: `B-21` kontrak stream ditutup D-27 dan D-29
 (`/video` + `/status`, 1280x720, 20 FPS, q80, maks 2 klien); `B-28` model
-otorisasi sisi kamera ditutup D-27 (token statis `X-Api-Key`); `B-29` lisensi
+otorisasi sisi kamera ditutup D-27 (`X-Api-Key`; token dibuat per sesi, D-34); `B-29` lisensi
 ditutup D-28 (MIT, atribusi di `README.md`); `B-30` jalur H.264 ditutup D-30
 (kedua berkasnya dihapus); `B-31` autostart kamera ditutup D-32 (`CWG-12`
 diturunkan menjadi pengingat setelah boot, bukan autostart). Yang masih
@@ -61,6 +61,7 @@ CamWasteGreen/
 │   └── stream/
 │       ├── MjpegHttpServer.kt       # NanoHTTPD: /, /video, /status
 │       ├── ApiAuth.kt               # token X-Api-Key + batas alamat
+│       ├── SessionToken.kt          # token acak per sesi server (D-34)
 │       ├── CameraConfig.kt          # default resolusi/FPS/quality/port
 │       ├── FrameEncoder.kt          # YUV ke JPEG satu kali + rotasi
 │       ├── FramePacket.kt           # jpeg + seq + capturedAtMs + dimensi

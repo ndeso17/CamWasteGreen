@@ -20,10 +20,9 @@ data class CameraConfig(
     val mountRotationDegrees: Int = 0,
     val writeTimeoutMs: Long = 2000L,
     /**
-     * Token `X-Api-Key` (D-27). Nilainya **tidak** boleh ditulis di repo:
-     * pemanggil mengisinya dari `BuildConfig`, yang dibangun dari
-     * `local.properties`. Default kosong berarti server menolak semua
-     * permintaan, bukan mengizinkan tanpa token.
+     * Token `X-Api-Key` (D-34). Default kosong berarti server membuat token
+     * acak baru setiap kali start; nilai eksplisit hanya dipakai sebagai
+     * pengganti di test atau bila operator memaksa token tetap.
      */
     val apiKey: String = "",
 ) {

@@ -104,8 +104,8 @@ Tidak ada izin `RECORD_AUDIO`. Mikrofon tidak ada di jalur sensor.
 | Aspek | Nilai |
 |---|---|
 | Jaringan | Server mendengarkan pada alamat hasil pilihan interface operator (Wi-Fi/LAN, USB tethering, atau semua). Pilihan disimpan di `SharedPreferences` dan dibaca saat server start. Bila interface pilihan tidak tersedia, server menolak start, bukan melebar ke `0.0.0.0` |
-| Akses | Token statis pada header `X-Api-Key` untuk `/video` dan `/status` (D-27). `/` tetap terbuka karena hanya berisi judul dan tautan. Pembatasan alamat IP sebagai lapis kedua opsional. Urutan pemeriksaan: `SERVER_MISCONFIGURED`, `ADDRESS_NOT_ALLOWED`, `MISSING_KEY`, `WRONG_KEY`. Penolakan dibalas `401` dengan badan JSON dan dicatat tanpa token |
-| Rahasia | Token, kunci, dan konfigurasi berada pada berkas di luar repo (`local.properties`), diteruskan ke `BuildConfig` saat build |
+| Akses | Token pada header `X-Api-Key` untuk `/video` dan `/status` (D-27; sumber token diubah D-34, dibuat per sesi). `/` tetap terbuka karena hanya berisi judul dan tautan. Pembatasan alamat IP sebagai lapis kedua opsional. Urutan pemeriksaan: `SERVER_MISCONFIGURED`, `ADDRESS_NOT_ALLOWED`, `MISSING_KEY`, `WRONG_KEY`. Penolakan dibalas `401` dengan badan JSON dan dicatat tanpa token |
+| Rahasia | Token dibuat acak per sesi server (D-34), hanya di memori, ditampilkan di layar; tidak masuk APK. `local.properties` hanya memuat `allowedAddresses` |
 | Perintah robot | Tidak ada endpoint yang meneruskan perintah ke ESP32-S3 |
 
 Kelemahan yang diketahui: HTTP cleartext pada jaringan ruang kontrol membuat

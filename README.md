@@ -58,8 +58,9 @@ Angka yang muncul di dokumen (1280x720, 20 FPS, quality 80, maks 2 klien, port
 8085) adalah default konfigurasi menurut D-29, bukan ambang mutu. Ambang mutu
 menunggu `B-06`.
 
-Akses `/video` dan `/status` memerlukan header `X-Api-Key`. Cara membuat dan
-mengisi token ada di [docs/token.md](docs/token.md).
+Akses `/video` dan `/status` memerlukan header `X-Api-Key`. Token dibuat acak
+setiap kali stream dimulai dan ditampilkan di layar aplikasi. Cara memakainya ada
+di [docs/token.md](docs/token.md).
 
 ## Bangun dan uji
 

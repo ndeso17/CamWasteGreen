@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,7 +24,20 @@ val localProperties = Properties().apply {
 fun secretProperty(name: String): String =
     (localProperties.getProperty(name) ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
 
-val apiKey: String = secretProperty("camwastegreen.apiKey")
+/**
+ * Kunci rilis dibaca dari luar repo (`~/.config/camwastegreen/`). Bila berkas
+ * tidak ada, build rilis tetap jalan tetapi tidak ditandatangani; jangan
+ * mengunggah APK tanpa tanda tangan.
+ */
+val signingDir: File = File(System.getProperty("user.home"), ".config/camwastegreen")
+val signingProperties: Properties = Properties().apply {
+    val file = File(signingDir, "signing.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val releaseKeystoreFile: File = File(signingDir, "release.jks")
+
 val allowedAddresses: String = secretProperty("camwastegreen.allowedAddresses")
 
 fun generateApkFileName(buildType: String): String {
@@ -39,6 +53,17 @@ android {
     namespace = "dev.ndeso17.camwastegreen"
     compileSdk = 36  // Diupdate dari 34 ke 36
 
+    signingConfigs {
+        create("release") {
+            if (releaseKeystoreFile.exists() && signingProperties.isNotEmpty()) {
+                storeFile = releaseKeystoreFile
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "dev.ndeso17.camwastegreen"
         minSdk = 24
@@ -48,9 +73,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // D-27: token statis untuk /video dan /status, plus daftar alamat
-        // yang diizinkan (dipisah koma; kosong berarti tanpa batas alamat).
-        buildConfigField("String", "API_KEY", "\"$apiKey\"")
+        // Daftar alamat yang diizinkan (dipisah koma; kosong berarti tanpa batas
+        // alamat). Token tidak lagi berasal dari build: dibuat saat server start.
         buildConfigField("String", "ALLOWED_ADDRESSES", "\"$allowedAddresses\"")
     }
 
@@ -61,6 +85,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (releaseKeystoreFile.exists() && signingProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

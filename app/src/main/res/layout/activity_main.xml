@@ -127,6 +127,14 @@
             android:text="Stream offline" />
 
         <TextView
+            android:id="@+id/tvApiKey"
+            style="@style/InfoText"
+            android:layout_width="match_parent"
+            android:layout_marginTop="6dp"
+            android:maxLines="2"
+            android:text="Token: —" />
+
+        <TextView
             android:id="@+id/tvUsbStatus"
             style="@style/InfoText"
             android:layout_marginTop="6dp"
