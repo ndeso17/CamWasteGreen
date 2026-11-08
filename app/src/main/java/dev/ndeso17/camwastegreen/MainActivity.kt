@@ -1,15 +1,22 @@
 package dev.ndeso17.camwastegreen
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -45,9 +52,38 @@ class MainActivity : AppCompatActivity() {
     private lateinit var groupInterface: RadioGroup
     private lateinit var btnApplyInterface: Button
     private lateinit var tvInterfaceHint: TextView
+    private lateinit var previewView: PreviewView
+    private lateinit var previewOverlay: LinearLayout
+    private lateinit var tvPreviewHint: TextView
+    private lateinit var btnTogglePreview: ImageButton
+    private lateinit var btnScreenOff: ImageButton
 
     /** Penyimpanan pilihan interface; dibaca saat start server (WP-35). */
     private lateinit var interfacePrefs: StreamInterfacePrefs
+
+    /**
+     * Binder service yang sedang terikat. `null` berarti service belum berjalan
+     * atau Activity sedang berhenti; pratinjau tidak bisa dipasang tanpa ini.
+     */
+    private var serviceBinder: CameraService.PreviewBinder? = null
+
+    /** Keadaan pratinjau yang dipilih operator; awal nyala (D-33). */
+    private var previewEnabled = true
+
+    /** `true` bila permintaan bind service sudah terdaftar. */
+    private var serviceBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            serviceBinder = service as? CameraService.PreviewBinder
+            applyPreviewState()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            serviceBinder = null
+            applyPreviewState()
+        }
+    }
 
     private var currentFps = 20
     private var currentQuality = 80
@@ -95,11 +131,21 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         handler.post(statusLoop)
+        // Ikat tanpa BIND_AUTO_CREATE: Activity tidak menyalakan service sendiri.
+        serviceBound =
+            bindService(Intent(this, CameraService::class.java), serviceConnection, 0)
     }
 
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(statusLoop)
+        // Lepas permukaan dulu supaya surface tidak ditahan saat Activity tidak terlihat.
+        serviceBinder?.setPreviewProvider(null)
+        serviceBinder = null
+        if (serviceBound) {
+            unbindService(serviceConnection)
+            serviceBound = false
+        }
     }
 
     /**
@@ -131,6 +177,11 @@ class MainActivity : AppCompatActivity() {
         groupInterface = findViewById(R.id.groupInterface)
         btnApplyInterface = findViewById(R.id.btnApplyInterface)
         tvInterfaceHint = findViewById(R.id.tvInterfaceHint)
+        previewView = findViewById(R.id.previewView)
+        previewOverlay = findViewById(R.id.previewOverlay)
+        tvPreviewHint = findViewById(R.id.tvPreviewHint)
+        btnTogglePreview = findViewById(R.id.btnTogglePreview)
+        btnScreenOff = findViewById(R.id.btnScreenOff)
     }
 
     private fun setupBottomSheet() {
@@ -173,6 +224,14 @@ class MainActivity : AppCompatActivity() {
                 else
                     BottomSheetBehavior.STATE_EXPANDED
         }
+
+        btnTogglePreview.setOnClickListener {
+            previewEnabled = !previewEnabled
+            applyPreviewState()
+            updateUI()
+        }
+
+        btnScreenOff.setOnClickListener { requestScreenOff() }
 
         btnSwitchCamera.setOnClickListener {
             if (MJPEGServerInstance.isRunning()) {
@@ -292,6 +351,7 @@ class MainActivity : AppCompatActivity() {
         btnIncreaseQuality.isEnabled = running
         btnDecreaseQuality.isEnabled = running
         btnSwitchCamera.isEnabled = running
+        btnScreenOff.isEnabled = running
 
         // Pilihan interface hanya berlaku pada start server berikutnya, jadi
         // kontrolnya dikunci selama stream berjalan (T-100).
@@ -303,6 +363,76 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.label_interface_unavailable)
         } else {
             getString(R.string.label_interface_ready)
+        }
+
+        btnTogglePreview.setImageResource(
+            if (previewEnabled) R.drawable.ic_preview_on else R.drawable.ic_preview_off
+        )
+        tvPreviewHint.text = when {
+            !running -> getString(R.string.label_stream_not_running)
+            !previewEnabled -> getString(R.string.label_preview_off)
+            else -> ""
+        }
+        val showPreview = running && previewEnabled && serviceBinder != null
+        previewView.visibility = if (showPreview) View.VISIBLE else View.GONE
+        previewOverlay.visibility = if (showPreview) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * Pasang atau lepas permukaan pratinjau pada service. Pratinjau mati
+     * tidak menghentikan kamera maupun stream (CWG-17).
+     */
+    private fun applyPreviewState() {
+        val binder = serviceBinder ?: return
+        binder.setPreviewProvider(if (previewEnabled) previewView.surfaceProvider else null)
+    }
+
+    /** Komponen admin perangkat yang dipakai tombol matikan layar (D-33). */
+    private val adminComponent: ComponentName
+        get() = ComponentName(this, ScreenLockAdminReceiver::class.java)
+
+    /**
+     * Kunci layar lewat admin perangkat.
+     *
+     * Tiga keadaan diperiksa berurutan dan tidak dicampur: admin belum aktif
+     * (minta aktivasi), layar belum punya kunci (jelaskan, jangan klaim
+     * berhasil), dan siap (panggil `lockNow`). Tidak ada aktivasi diam-diam
+     * saat aplikasi dibuka (CWG-19).
+     */
+    private fun requestScreenOff() {
+        val dpm = getSystemService(DevicePolicyManager::class.java)
+        if (dpm == null || !dpm.isAdminActive(adminComponent)) {
+            Log.i(TAG, "Admin belum aktif; membuka layar aktivasi, tidak mengunci.")
+            try {
+                startActivity(
+                    Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                        .putExtra(
+                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            getString(R.string.device_admin_explanation)
+                        )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Layar aktivasi admin tidak dapat dibuka: ${e.message}", e)
+                Toast.makeText(this, R.string.toast_lock_failed, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        if (keyguard == null || !keyguard.isDeviceSecure) {
+            // Tanpa PIN/pattern, `lockNow` tidak menghasilkan layar terkunci.
+            Toast.makeText(this, R.string.toast_set_screen_lock, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        try {
+            Log.i(TAG, "lockNow dipanggil: admin aktif, kunci layar tersedia.")
+            dpm.lockNow()
+            Toast.makeText(this, R.string.toast_screen_locked, Toast.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "lockNow ditolak: ${e.message}", e)
+            Toast.makeText(this, R.string.toast_lock_failed, Toast.LENGTH_LONG).show()
         }
     }
 

@@ -7,7 +7,16 @@
     <string name="label_quality_level">Kualitas: %1$s</string>
     <string name="label_stream_url">Stream: http://%1$s:%2$d/video</string>
     <string name="label_stream_offline">Stream offline</string>
-    <string name="label_preview_hint">Pratinjau ada di alamat stream; tidak ada preview di layar ini.</string>
+    <string name="label_stream_not_running">Stream belum berjalan. Tekan tombol rekam untuk memulai.</string>
+    <string name="label_preview_off">Pratinjau dimatikan. Stream tetap berjalan.</string>
+    <string name="cd_toggle_preview">Nyalakan atau matikan pratinjau</string>
+    <string name="cd_screen_off">Matikan layar</string>
+
+    <!-- Admin perangkat dan tombol matikan layar (WP-40, D-33). -->
+    <string name="device_admin_explanation">CamWasteGreen memakai hak admin perangkat hanya untuk mengunci layar. Tidak ada data perangkat yang diakses, diubah, atau dihapus.</string>
+    <string name="toast_set_screen_lock">Setel PIN, pattern, atau sandi layar dulu di pengaturan perangkat. Tanpa itu layar tidak dapat dikunci.</string>
+    <string name="toast_lock_failed">Layar tidak dapat dikunci oleh aplikasi.</string>
+    <string name="toast_screen_locked">Layar dikunci. Stream tetap berjalan.</string>
     <string name="label_camera_state">Kamera: %1$s, %2$d klien</string>
     <string name="label_server_stopped">Server berhenti</string>
     <string name="label_usb_present">USB: %1$s</string>

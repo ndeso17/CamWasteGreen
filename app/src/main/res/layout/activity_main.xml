@@ -9,11 +9,20 @@
     android:fitsSystemWindows="true">
 
     <!--
-        Tidak ada PreviewView: kamera dipegang CameraService, bukan Activity.
-        Panel ini hanya menampilkan status terukur dari registry service.
+        Pratinjau kamera (CWG-17). Kamera dipegang CameraService; PreviewView di
+        sini hanya menerima permukaan dari use case `Preview` di service.
+        Hamparan status tampil saat pratinjau dimatikan atau stream berhenti.
     -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone"
+        app:scaleType="fillCenter" />
+
     <LinearLayout
-        android:id="@+id/previewPlaceholder"
+        android:id="@+id/previewOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black"
@@ -35,7 +44,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="@string/label_preview_hint"
+            android:text="@string/label_stream_not_running"
             android:textColor="@color/white"
             android:textSize="13sp" />
     </LinearLayout>
@@ -72,6 +81,30 @@
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btnScreenOff"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_status_chip"
+                android:src="@drawable/ic_screen_off"
+                android:contentDescription="@string/cd_screen_off"
+                android:scaleType="centerInside"
+                android:padding="8dp"
+                android:elevation="4dp" />
+
+            <ImageButton
+                android:id="@+id/btnTogglePreview"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_status_chip"
+                android:src="@drawable/ic_preview_on"
+                android:contentDescription="@string/cd_toggle_preview"
+                android:scaleType="centerInside"
+                android:padding="8dp"
+                android:elevation="4dp" />
 
             <ImageButton
                 android:id="@+id/btnTogglePanel"

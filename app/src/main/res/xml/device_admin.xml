@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Kebijakan admin perangkat untuk tombol "Matikan layar" (D-33, CWG-19).
+    Hanya force-lock: layar dapat dikunci. Tidak ada wipe-data, reset-password,
+    atau kebijakan lain yang diminta.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

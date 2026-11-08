@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -22,6 +23,7 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -206,7 +208,29 @@ class CameraService : Service(), LifecycleOwner {
     /** Kunci AE/AWB/AF hanya diminta sekali per ikatan kamera. */
     private var tuningRequested = false
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    /** Binder lokal untuk Activity: hanya meneruskan permukaan pratinjau (CWG-17). */
+    inner class PreviewBinder : Binder() {
+        fun setPreviewProvider(provider: Preview.SurfaceProvider?) {
+            // CameraX memanggil `Threads.checkMainThread()` di dalam
+            // `setSurfaceProvider`, sedangkan pemanggilan binder datang di
+            // thread binder. Karena itu pekerjaan dipindah ke main thread.
+            handler.post {
+                previewProvider = provider
+                preview?.setSurfaceProvider(provider)
+            }
+        }
+    }
+
+    private val binder = PreviewBinder()
+
+    /** Permukaan pratinjau terakhir dari Activity; `null` bila pratinjau dimatikan. */
+    @Volatile
+    private var previewProvider: Preview.SurfaceProvider? = null
+
+    /** Use case pratinjau yang ikut terikat bersama [imageAnalysis]. */
+    private var preview: Preview? = null
+
+    override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onCreate() {
         super.onCreate()
@@ -359,9 +383,16 @@ class CameraService : Service(), LifecycleOwner {
         val cameraSelector =
             if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
 
+        // Pratinjau memakai use case terpisah; JPEG tetap hanya dari ImageAnalysis (CWG-N07).
+        val previewUseCase = Preview.Builder()
+            .setResolutionSelector(resolutionSelector)
+            .build()
+        preview = previewUseCase
+        previewUseCase.setSurfaceProvider(previewProvider)
+
         try {
             provider.unbindAll()
-            boundCamera = provider.bindToLifecycle(this, cameraSelector, imageAnalysis)
+            boundCamera = provider.bindToLifecycle(this, cameraSelector, imageAnalysis, previewUseCase)
             framesSinceBind = 0
             tuningRequested = false
             MJPEGServerInstance.setTuningState(CameraTuning.STATE_PENDING)
@@ -438,6 +469,7 @@ class CameraService : Service(), LifecycleOwner {
     private fun stopCamera() {
         cameraProvider?.unbindAll()
         cameraProvider = null
+        preview = null
         Log.i(TAG, "Kamera dihentikan.")
     }
 
