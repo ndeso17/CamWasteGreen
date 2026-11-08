@@ -2836,6 +2836,47 @@ Catatan tambahan untuk percobaan berikutnya:
   boot, bukti `IPCam.BootReceiver` di logcat, dan `when` notifikasi yang
   jatuh setelah `btime` serta sebelum proses aplikasi lahir.
 
+### Log WP-19 (Executor) — reboot bersih, MV-03 sah, 8 November 2026
+
+APK bersih `IPCam_08November2026_1118.apk` (tanpa token uji, `local.properties`
+hanya `sdk.dir`) dipasang dengan `adb install -r`. Paket tetap `stopped=false`,
+`POST_NOTIFICATIONS` dan `CAMERA` sudah `granted=true`. Aplikasi **tidak**
+dibuka sesudah pemasangan; `adb reboot` langsung dijalankan dan aplikasi tidak
+dibuka sama sekali sampai pemeriksaan selesai.
+
+Hasil:
+
+```text
+btime 1794111560                     -> 11:19:20 WIB
+am_proc_start 11:21:53.149 [0,26293,10458,dev.ndeso17.camwastegreen,
+  broadcast,{dev.ndeso17.camwastegreen/...BootReceiver}]
+Start proc 26293:dev.ndeso17.camwastegreen/u0a458
+  for broadcast {...BootReceiver}
+dumpsys notification: id=1002 channel=boot_reminder category=reminder
+  flags=AUTO_CANCEL when=1794111716125   -> 11:21:56 WIB
+ps -A | grep camwastegreen           -> (kosong)
+dumpsys activity services            -> 0 baris
+dumpsys media.camera | grep -c paket -> 0
+am_activity_launch_time/am_create_activity untuk paket -> 0
+```
+
+Tangkapan baki notifikasi (OCR): "Kamera belum menyala - 2 m" dan
+"Android tidak mengizinkan kamera dinyalakan otomatis s...";
+`.work/evidence/mv03-reboot-clean-20261108.png`.
+
+Kesimpulan: `BOOT_COMPLETED` benar-benar memanggil `BootReceiver`, notifikasi
+pengingat tampil tiga detik kemudian, dan tidak ada proses, service, klien
+kamera, maupun Activity yang berjalan. `MV-03` naik ke `TERUJI-SESUAI`.
+
+Keterbatasan yang tetap berlaku:
+- Baris log aplikasi `IPCam.BootReceiver: Pengingat boot ditampilkan` tidak
+  ditemukan di buffer setelah boot; bukti bersandar pada `am_proc_start`
+  (broadcast ke `BootReceiver`), `when` notifikasi, dan ketiadaan proses.
+- `PendingIntent` dari notifikasi ke `MainActivity` belum dibuka operator.
+- `POST_NOTIFICATIONS` diberikan lewat `pm grant`, bukan dialog izin; jalur
+  izin dicabut belum diuji.
+- Status WP tetap `qc`; menaikkan ke `done` memerlukan QC independen.
+
 ---
 
 ## WP-20 — Orientasi tetap dan hapus izin yang tidak dipakai
