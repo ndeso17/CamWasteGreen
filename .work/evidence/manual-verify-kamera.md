@@ -59,6 +59,13 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 - Bukti: tangkapan layar notifikasi, logcat yang memuat
   `IPCam.BootReceiver`, dan keluaran `/status` yang menunjukkan kamera belum
   berjalan (atau tidak ada proses aplikasi).
+- Catatan percobaan 8 November 2026: APK `c08e354` dipasang, izin
+  `CAMERA` dan `POST_NOTIFICATIONS` diberikan lewat `pm grant`, lalu
+  `adb reboot` dijalankan. **Perangkat tidak kembali terdeteksi** setelah
+  reboot: `adb devices -l` kosong dan `lsusb` tidak lagi menampilkan
+  `22b8:2e81`. Karena itu tidak ada logcat maupun tangkapan notifikasi yang
+  bisa diambil. Butir ini tetap `BELUM DIUJI`; kegagalan deteksi bukan bukti
+  notifikasi gagal tampil.
 - Catatan wajib: **`CWG-12` sudah berubah bentuk (D-32, penutup B-31).** Yang
   diuji bukan lagi autostart, melainkan munculnya notifikasi pengingat setelah
   boot. Android 14+ menolak akses kamera untuk foreground service tipe
