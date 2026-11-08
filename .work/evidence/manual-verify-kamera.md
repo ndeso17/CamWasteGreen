@@ -63,19 +63,7 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-03 — Pengingat setelah boot
 
-- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK `c08e354`)
-- Catatan hasil: setelah `adb reboot`, `dumpsys notification` menampilkan
-  `NotificationRecord(... id=1002 channel=boot_reminder ... category=reminder
-  flags=AUTO_CANCEL)` dengan waktu `when=1794105059361` (≈2 menit setelah
-  `BOOT_COMPLETED` pukul 09:28:53). Kanal `boot_reminder` bernama
-  "Pengingat setelah boot", importance=3. `am_proc_start` mencatat
-  `reason=broadcast`; `ps -A` dan `dumpsys activity services` tidak memuat
-  CamWasteGreen sama sekali → kamera **tidak** berjalan. Tangkapan layar baki
-  notifikasi menunjukkan teks "Kamera belum menyala" dan "Android tidak
-  mengizinkan kamera dinyalakan otomatis s…" — tersimpan sebagai
-  `.work/evidence/mv03-shade-20261108.png`. Logcat tidak lagi memuat baris
-  `IPCam.BootReceiver` (buffer sudah berputar), jadi bukti memakai
-  `dumpsys notification` dan tangkapan layar.
+- Status: `BELUM DIUJI` — bukti sebelumnya dicabut, lihat catatan koreksi di bawah
 - Kebutuhan: CWG-12 (bentuk baru menurut D-32)
 - Perangkat: ____
 - Prosedur: berikan izin notifikasi, reboot perangkat, tunggu 90 detik tanpa
@@ -85,13 +73,6 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 - Bukti: tangkapan layar notifikasi, logcat yang memuat
   `IPCam.BootReceiver`, dan keluaran `/status` yang menunjukkan kamera belum
   berjalan (atau tidak ada proses aplikasi).
-- Catatan percobaan 8 November 2026: APK `c08e354` dipasang, izin
-  `CAMERA` dan `POST_NOTIFICATIONS` diberikan lewat `pm grant`, lalu
-  `adb reboot` dijalankan. **Perangkat tidak kembali terdeteksi** setelah
-  reboot: `adb devices -l` kosong dan `lsusb` tidak lagi menampilkan
-  `22b8:2e81`. Karena itu tidak ada logcat maupun tangkapan notifikasi yang
-  bisa diambil. Butir ini tetap `BELUM DIUJI`; kegagalan deteksi bukan bukti
-  notifikasi gagal tampil.
 - Catatan wajib: **`CWG-12` sudah berubah bentuk (D-32, penutup B-31).** Yang
   diuji bukan lagi autostart, melainkan munculnya notifikasi pengingat setelah
   boot. Android 14+ menolak akses kamera untuk foreground service tipe
@@ -101,6 +82,50 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
   dan kamera tetap belum berjalan sampai operator menekan mulai.
 - Tanggal: ____
 - Catatan: ____
+
+#### Koreksi bukti MV-03, 8 November 2026
+
+Bukti MV-03 yang sebelumnya ditulis (dengan status `TERUJI-SESUAI`) **dicabut**.
+Alasannya, berdasarkan pembacaan ulang logcat perangkat:
+
+- `am_proc_start` untuk `dev.ndeso17.camwastegreen` pada 8 Nov 2026 mencatat
+  `10:18:13.418 ... for next-top-activity {...MainActivity}`. Proses aplikasi
+  lahir karena **operator membuka aplikasi**, bukan karena broadcast.
+- Notifikasi `id=1002 channel=boot_reminder` yang tercatat memiliki
+  `when=1794107894112` = **10:18:14**, yaitu satu detik setelah pembukaan
+  aplikasi di atas dan empat menit setelah `btime`. Waktu ini tidak
+  membedakan antara pemicu boot dan pembukaan aplikasi, sehingga tidak bisa
+  dijadikan bukti perilaku reboot.
+- `BroadcastQueue: BOOT_COMPLETED_BROADCAST_COMPLETION_LATENCY_REPORTED`
+  mencatat `10:18:14.118 ... receiversSize:1` dan
+  `10:18:30.067 ... receiversSize:394`, dengan
+  `ActivityManager: Finished processing BOOT_COMPLETED for u0` pada
+  `10:18:30`. Boot perangkat (`btime 1794107662` = 10:14:22) jauh lebih awal.
+- Baris log aplikasi `IPCam.BootReceiver` **tidak ada** di buffer logcat saat
+  diperiksa. Bukti lama bertumpu pada `dumpsys notification` dan tangkapan
+  layar baki, bukan pada log aplikasi.
+- Catatan tambahan: notifikasi `id=1002` juga pernah muncul sekitar dua detik
+  setelah `adb install`, karena sistem memicu `BOOT_COMPLETED` ke paket yang
+  baru dipasang/diganti. Karena itu kemunculan notifikasi saja tidak
+  membuktikan perilaku reboot.
+- Selain itu, paket dalam keadaan `stopped=true` (setelah `am force-stop`)
+  tidak menerima `BOOT_COMPLETED`. Untuk uji reboot yang sah, paket harus
+  `stopped=false`: buka aplikasi sekali setelah pemasangan, tekan HOME,
+  baru reboot.
+
+Kesimpulan: **`MV-03` kembali `BELUM DIUJI`.** Uji ulang yang sah butuh
+reboot dengan paket `stopped=false`, logcat yang dibersihkan sebelum reboot
+(`adb logcat -c`), dan bukti berupa baris log
+`IPCam.BootReceiver: Pengingat boot ditampilkan` beserta `when` notifikasi
+yang jatuh **setelah** `btime` dan **sebelum** `am_proc_start` aplikasi
+untuk pembukaan manual.
+
+Catatan pengguna (8 Nov 2026): proses `CameraService` pada 10:18:24
+dinyalakan **manual** oleh operator melalui tombol aplikasi, bukan oleh
+`BootReceiver`. `MainActivity` memanggil `CameraService.start` hanya dari
+tekan tombol tersebut; `logcat` mencatat
+`10:18:24.079 Background started FGS: Allowed [... callingUid: 10458;
+uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 
 ## B. Batas klien dan klien lambat
 
@@ -287,7 +312,7 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 |---|---|---|
 | MV-01 | `TERUJI-SESUAI` | layar tidur, `/video` 200, service foreground `camera` |
 | MV-02 | `TERUJI-SESUAI` | latar belakang, `/status` tetap `streaming:true` |
-| MV-03 | `TERUJI-SESUAI` | notifikasi `boot_reminder` id=1002, kamera tidak jalan |
+| MV-03 | `BELUM DIUJI` | bukti sebelumnya dicabut: notifikasi 10:18:14 bersamaan pembukaan app, bukan boot |
 | MV-04 | `TERUJI-SESUAI` | `clients:2` |
 | MV-05 | `TERUJI-SESUAI` | klien ketiga `503` "Batas 2 klien tercapai" |
 | MV-06 | `BELUM DIUJI` | parsial: server tidak terblokir; pemutusan oleh server belum |

@@ -2774,47 +2774,67 @@ Pemeriksaan sendiri (bukan QC independen):
 
 ### Log WP-19 (Executor) — bukti MV-03 pada perangkat, 8 November 2026
 
-Perangkat `ZP2222SQLL` kembali terdeteksi. APK `c08e354` (build dengan
-`BootReceiver` bentuk D-32) sudah terpasang, izin `CAMERA` dan
-`POST_NOTIFICATIONS` diberikan lewat `pm grant`, lalu `adb reboot` dijalankan
-dan perangkat dibiarkan tanpa dibuka selama ±2 menit.
+**DICABUT.** Bukti di bawah tidak sah dan dicabut pada 8 November 2026
+setelah logcat perangkat dibaca ulang. Status `MV-03` dikembalikan ke
+`BELUM DIUJI`. Rincian pembatalan ada di
+`.work/evidence/manual-verify-kamera.md` bagian "Koreksi bukti MV-03".
 
-Hasil yang terbaca:
+Alasan pembatalan:
+- `am_proc_start` mencatat `10:18:13.418 ... for next-top-activity
+  {...MainActivity}`, jadi proses aplikasi lahir dari **pembukaan aplikasi
+  oleh operator**, bukan dari broadcast boot.
+- Notifikasi `id=1002 channel=boot_reminder` yang dipakai sebagai bukti punya
+  `when=1794107894112` = **10:18:14**, satu detik setelah
+  `am_proc_start` 10:18:13 (`next-top-activity`) dan bersamaan dengan
+  `BOOT_COMPLETED` yang selesai diproses 10:18:30. Waktu itu tidak
+  membedakan pemicu boot dari pembukaan aplikasi, sehingga tidak sah
+  sebagai bukti perilaku reboot.
+- `btime` = 10:14:22, sedangkan `BOOT_COMPLETED` selesai diproses
+  10:18:30 (`Finished processing BOOT_COMPLETED for u0`). Selisih `when`
+  terhadap boot tidak konsisten dengan klaim "notifikasi muncul setelah boot
+  tanpa dibuka aplikasi".
+- Baris log `IPCam.BootReceiver` tidak ada di buffer logcat saat diperiksa.
 
-```text
-dumpsys notification --noredact
-  NotificationRecord(... pkg=dev.ndeso17.camwastegreen id=1002 tag=null
-    importance=3 key=0|dev.ndeso17.camwastegreen|1002|null|10458
-    channel=boot_reminder ... flags=AUTO_CANCEL category=reminder)
-  effectiveNotificationChannel=NotificationChannel{mId='boot_reminder',
-    mName=Pengingat setelah boot, mImportance=3 ...}
-  contentIntent=PendingIntentRecord{... startActivity ...}
-
-logcat -b main: "Posting BOOT_COMPLETED user #0" 09:28:53
-logcat -b events: am_proc_start [... reason=broadcast ...] untuk proses lain
-ps -A                          -> tidak ada dev.ndeso17.camwastegreen
-dumpsys activity services      -> (nothing)
-```
-
-Tangkapan baki notifikasi (OCR) membaca `Kamera belum menyala - 2 m` dan
-`Android tidak mengizinkan kamera dinyalakan otomatis s...`; berkasnya
-`.work/evidence/mv03-shade-20261108.png` (commit `197c343`).
-
-Jadi, pada perangkat ini: notifikasi pengingat **muncul** dan kamera
-**tidak** berjalan sampai operator menekan mulai. `MV-03` naik ke
-`TERUJI-SESUAI`.
+Tangkapan baki notifikasi `.work/evidence/mv03-shade-20261108.png` (commit
+`197c343`) **tetap ada sebagai artefak**, tetapi tidak lagi dipakai sebagai
+bukti perilaku reboot.
 
 Keterbatasan yang harus dibaca bersama hasil ini:
-- Baris log `IPCam.BootReceiver` tidak lagi ada di buffer (sudah berputar),
-  jadi bukti bersandar pada `dumpsys notification`, waktu `when`
-  (`1794105059361`, ≈2 menit setelah `BOOT_COMPLETED`), dan tangkapan layar —
-  bukan pada log aplikasi sendiri.
 - Notifikasi belum pernah dibuka operator; `PendingIntent` ke `MainActivity`
   belum dibuktikan bekerja dari notifikasi itu.
 - `POST_NOTIFICATIONS` diberikan lewat `pm grant`, bukan lewat dialog izin.
   Bila izin dicabut pengguna, receiver hanya menulis satu baris log; jalur itu
   belum diuji.
 - Status WP tetap `qc`; menaikkan ke `done` memerlukan QC independen.
+
+### Log WP-19 (Executor, koreksi) — autostart ditolak, kamera dinyalakan manual
+
+Pengguna mengonfirmasi pada 8 November 2026 bahwa proses `CameraService` pukul
+10:18:24 dinyalakan **manual** dari tombol aplikasi. Logcat mendukung itu:
+
+```text
+10:18:13.418 I/ActivityManager: Start proc 5085:dev.ndeso17.camwastegreen/u0a458
+  for next-top-activity {dev.ndeso17.camwastegreen/...MainActivity}
+10:18:24.079 I/ActivityManager: Background started FGS: Allowed
+  [callingPackage: dev.ndeso17.camwastegreen; callingUid: 10458; uidState: TOP;
+   intent: Intent { act=dev.ndeso17.camwastegreen.action.START_CAMERA ...
+   cmp=dev.ndeso17.camwastegreen/.CameraService }]
+```
+
+`CameraService.start` hanya dipanggil dari `MainActivity` (tombol mulai), dan
+`BootReceiver` tidak pernah memanggilnya. Jadi tidak ada autostart kamera —
+sesuai D-32 dan B-31.
+
+Catatan tambahan untuk percobaan berikutnya:
+- Notifikasi `id=1002` juga muncul sekitar dua detik setelah `adb install`,
+  karena sistem memicu `BOOT_COMPLETED` ke paket yang baru dipasang. Kemunculan
+  notifikasi saja tidak membuktikan perilaku reboot.
+- Paket dalam keadaan `stopped=true` (setelah `am force-stop`) tidak menerima
+  `BOOT_COMPLETED`. Uji reboot yang sah butuh paket `stopped=false`: buka
+  aplikasi sekali setelah pemasangan, tekan HOME, baru reboot.
+- Uji sah berikutnya: `adb logcat -c` sebelum reboot, `btime` sebagai penanda
+  boot, bukti `IPCam.BootReceiver` di logcat, dan `when` notifikasi yang
+  jatuh setelah `btime` serta sebelum proses aplikasi lahir.
 
 ---
 
@@ -3974,7 +3994,6 @@ Butir yang berubah dari `BELUM DIUJI` menjadi `TERUJI-SESUAI`:
 |---|---|
 | MV-01 | `KEYCODE_SLEEP` → `mWakefulness=Dozing`; 60 detik kemudian `/video` `HTTP=200`, 1932032 byte; `dumpsys activity services` → `isForeground=true foregroundId=1001 types=0x00000040` |
 | MV-02 | `topResumedActivity` = launcher; `/status` tetap `streaming:true`, `frameSeq` 244 → 768 |
-| MV-03 | `dumpsys notification` → `id=1002 channel=boot_reminder category=reminder flags=AUTO_CANCEL`; `ps -A` tanpa proses aplikasi; tangkapan baki notifikasi |
 | MV-04 | dua `curl /video` bersamaan → `/status` `clients:2` |
 | MV-05 | klien ketiga → `HTTP=503` "Batas 2 klien tercapai" |
 | MV-11 | `/status` dan JPEG `/video` sama-sama 720x1280 |
@@ -3984,6 +4003,7 @@ Butir yang tetap `BELUM DIUJI` beserta hasil parsialnya:
 
 | Butir | Hasil parsial | Yang belum |
 |---|---|---|
+| MV-03 | `dumpsys notification` sempat memuat `id=1002 channel=boot_reminder`; `ps -A` tanpa proses aplikasi pada pemeriksaan itu | **bukti dicabut**: `when` notifikasi 10:18:14 bersamaan dengan pembukaan `MainActivity` (`am_proc_start ... next-top-activity` 10:18:13) dan selesainya `BOOT_COMPLETED`, sehingga tidak membedakan pemicu; log `IPCam.BootReceiver` tidak ada di buffer |
 | MV-06 | `/status` tetap 200 dengan tanggap 15–25 ms selama klien `--limit-rate 2k` | pemutusan oleh server, bukan oleh `curl` |
 | MV-07 | `measuredFps` 3,22–3,50 pada 720x1280 target 20, ±3 menit | durasi 5 menit, suhu perangkat |
 | MV-09 | `tuningState:"locked"` konsisten | perbandingan warna antar bingkai |
@@ -3996,15 +4016,21 @@ Catatan penting:
 - Angka FPS 3,2–3,5 **bukan** ambang dan tidak menutup `B-06`. Angka itu juga
   berbeda dari QC-47 (1,6–1,8) pada uji sebelumnya; selisih ini tidak
   dijelaskan oleh data yang ada.
-- `local.properties` sudah dikembalikan ke `sdk.dir` saja. Dua APK uji
-  bertoken yang dibuat (0935 dan 0947) tetap ada di `app/build/outputs/` dan
-  tidak di-commit; APK 0935 terpasang kembali di perangkat setelah uji MV-13.
-- Uji MV-13 memakai `allowedAddresses` sempit; APK 0947 juga memuat token uji,
-  jadi tidak boleh disebarkan.
-- Kamera pada perangkat uji menolak start pada beberapa percobaan setelah APK
-  dipasang ulang (layar tetap "Server berhenti", `/status` tidak menjawab)
-  sampai tombol shutter ditekan ulang setelah layar dibangunkan. Perilaku itu
-  belum diselidiki dan tidak diklaim sebagai normal.
+- `local.properties` sudah dikembalikan ke `sdk.dir` saja. APK uji bertoken
+  (`IPCam_08November2026_0935.apk`, `..._0947.apk`, `..._1001.apk`) berada di
+  `app/build/outputs/` dan tidak di-commit. Berkas `0947` memuat
+  `allowedAddresses` sempit dan dipakai untuk MV-13.
+- Pada 10:02 perangkat dipasang ulang dengan APK uji bertoken (`..._1001`)
+  dan token itu masih ada di build tersebut. APK ini hanya ada di perangkat uji.
+  Build tanpa token harus dipasang kembali sebelum perangkat dipakai ulang.
+- Penyebab "Stream offline" berulang: `stream_settings.xml` berisi
+  `interface_choice=usb_tethering` dan tidak ada interface USB, sehingga
+  `MJPEGServerInstance.start` menolak dengan `Interface usb_tethering tidak
+  tersedia; server tidak dimulai`. Ini perilaku WP-35 yang benar, bukan
+  kegagalan kamera. Setelah nilai diganti `all` (lewat `run-as`), tombol
+  shutter memulai stream: `/status` `streaming:true`, `720x1280`, `tuningState:"locked"`.
+- Koreksi atas kalimat sebelumnya: APK `0935` **tidak** terpasang kembali
+  setelah uji MV-13; yang terpasang adalah `0947`, lalu `1001`.
 
 Kriteria terima WP-30 versi awal ("semuanya `BELUM DIUJI`") **tidak lagi**
 berlaku setelah uji ini; yang menggantikannya: setiap butir punya status sah
