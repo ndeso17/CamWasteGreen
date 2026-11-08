@@ -4005,12 +4005,38 @@ Butir yang tetap `BELUM DIUJI` beserta hasil parsialnya:
 |---|---|---|
 | MV-03 | `dumpsys notification` sempat memuat `id=1002 channel=boot_reminder`; `ps -A` tanpa proses aplikasi pada pemeriksaan itu | **bukti dicabut**: `when` notifikasi 10:18:14 bersamaan dengan pembukaan `MainActivity` (`am_proc_start ... next-top-activity` 10:18:13) dan selesainya `BOOT_COMPLETED`, sehingga tidak membedakan pemicu; log `IPCam.BootReceiver` tidak ada di buffer |
 | MV-06 | `/status` tetap 200 dengan tanggap 15–25 ms selama klien `--limit-rate 2k` | pemutusan oleh server, bukan oleh `curl` |
-| MV-07 | `measuredFps` 3,22–3,50 pada 720x1280 target 20, ±3 menit | durasi 5 menit, suhu perangkat |
+| MV-07 | `measuredFps` 3,22–3,50 pada 720x1280 target 20, ±3 menit | **selesai pada sesi lanjutan**: 5 menit penuh, 3,47–3,58, suhu dicatat |
 | MV-09 | `tuningState:"locked"` konsisten | perbandingan warna antar bingkai |
-| MV-13 | APK dengan `allowedAddresses=10.99.99.99` menolak `127.0.0.1` dengan `401 ADDRESS_NOT_ALLOWED` | sisi terima dari alamat terdaftar |
+| MV-13 | APK dengan `allowedAddresses=10.99.99.99` menolak `127.0.0.1` dengan `401 ADDRESS_NOT_ALLOWED` | **selesai pada sesi lanjutan**: sisi terima `200` dengan APK `127.0.0.1` |
 
-Belum dijalankan sama sekali: MV-08 (bandwidth) dan MV-10 (butuh dudukan
-sebenarnya).
+Belum dijalankan sama sekali: MV-10 (butuh dudukan sebenarnya).
+
+### Log WP-30 (Executor) — uji lanjutan MV-06..MV-14, 8 November 2026
+
+Sesi lanjutan pada perangkat `ZP2222SQLL` memakai dua build uji:
+`IPCam_08November2026_1036.apk` (`allowedAddresses=127.0.0.1`) untuk MV-13 dan
+`IPCam_08November2026_1050.apk` (token saja, tanpa batas alamat) untuk uji LAN
+lainnya. `local.properties` dikembalikan ke `sdk.dir` saja setelah setiap build.
+
+| Butir | Hasil sesi ini | Status akhir |
+|---|---|---|
+| MV-13 | APK 1036: `/status` dari `127.0.0.1` dengan token benar → `200` (`streaming:true`, `720x1280`), tanpa token → `401`, token salah → `401`; `/video` → `200`. Sisi tolak (`ADDRESS_NOT_ALLOWED`) dari APK 0947 tetap berlaku | `TERUJI-SESUAI` |
+| MV-07 | 11 sampel 30 detik selama 5 menit penuh (11:08:37–11:13:40): `measuredFps` 3,47–3,58, `frameSeq` +107/30 detik. Suhu HAL sesudah sampel: CPU 55,7–62,1 °C, `skin` 45,7 °C (`mStatus=3`), `Thermal Status: 3` | `TERUJI-SESUAI` untuk pengukuran, **bukan** bukti target 20 FPS terpenuhi |
+| MV-06 | Klien `curl --limit-rate 1k` lewat LAN: klien cepat tetap `200` (88274 byte), `/status` tanggap 0,2–3,0 detik. Namun `clients` turun ke 0 pada ±17 detik sementara `curl -m 170` masih menerima data sampai 250072 byte (`exit=28`). Pada uji 60 detik, `clients` baru 0 setelah `curl` berhenti sendiri | tetap `BELUM DIUJI`; anomali belum dijelaskan |
+| MV-08 | 62 detik per tingkat, 720x1280: High (q80) 11816434 byte ±190585 B/s; Medium (q50) 3988733 byte ±64333 B/s; Low (q30) 5692747 byte ±91817 B/s. Low > Medium tidak dijelaskan; tingkat maksimum (q100) belum terukur karena tombol tidak menaikkan label di luar `High` | tetap `BELUM DIUJI` |
+| MV-14 | Tangkapan `mv14-interface-locked-20261108.png` saat streaming: OCR membaca "Hentikan stream untuk mengganti interface". Listener `:1F95` di `::` (state `0A`) untuk pilihan "semua" | tetap `BELUM DIUJI`; USB tethering nyata belum |
+| MV-09 | `tuningState:"locked"` konsisten sepanjang sesi | tetap `BELUM DIUJI`; perbandingan bingkai belum |
+| MV-10 | — | tetap `BELUM DIUJI`; butuh dudukan |
+
+Catatan metode yang memengaruhi tafsir:
+- Uji klien lambat lewat `adb forward` **tidak** menghasilkan backpressure nyata
+  (klien bertahan 153 detik), karena buffering adb. Uji LAN langsung yang
+  dipakai sebagai hasil. Angka dari jalur `adb forward` tidak dipakai.
+- `dumpsys thermalservice` bagian "Cached temperatures" tidak berubah antar
+  pembacaan; hanya "Current temperatures from HAL" yang dipakai sebagai suhu.
+- Perubahan kualitas lewat tombol tidak selalu terlihat pada label OCR; label
+  `High` muncul untuk q80 dan q100, sehingga tingkat maksimum tidak terbukti
+  terpisah.
 
 Catatan penting:
 - Angka FPS 3,2–3,5 **bukan** ambang dan tidak menutup `B-06`. Angka itu juga

@@ -158,7 +158,15 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 ### MV-06 — Klien lambat diputus tanpa memblokir server
 
 - Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: server tetap melayani; pemutusan oleh server belum terbukti)
-- Catatan hasil: satu klien `curl --limit-rate 2k` membaca `/video` selama
+- Uji lanjutan 8 Nov 2026 (APK 1050, LAN `10.42.0.83:8085`, klien
+  `curl --limit-rate 1k`): klien cepat tetap menerima `HTTP=200` (88274 byte)
+  saat klien lambat aktif; `/status` tanggap 0,2–3,0 detik (selama
+  klien lambat sejak 5 detik). Pada satu percobaan `clients` turun ke 0 pada
+  ±17 detik sementara `curl` masih menerima data sampai batas 170 detik
+  (250072 byte, `exit=28`). Ini tidak sama dengan pemutusan oleh server:
+  tidak ada log pemutusan di kode, dan koneksi tidak selesai. Anomali ini
+  belum dijelaskan dan tetap menjadi temuan terbuka.
+- Catatan hasil awal: satu klien `curl --limit-rate 2k` membaca `/video` selama
   70 detik (270336 byte terkirim) sementara `/status` dipanggil tiap 10
   detik. Semua balasan `/status` `HTTP=200` dengan waktu tanggap 15–25 ms,
   jadi klien lambat tidak memblokir server. Klien lambat terputus oleh
@@ -180,7 +188,23 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 
 ### MV-07 — FPS terukur pada perangkat
 
-- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: 6 sampel dalam ±3 menit, bukan 5 menit penuh)
+- Status: `TERUJI-SESUAI` (8 Nov 2026, APK 1050, sampel 5 menit penuh; **bukan** bukti FPS memenuhi target)
+- **Batas klaim:** yang sesuai adalah prosedur pengukuran dan kejujuran angka
+  (CWG-N05). FPS terukur 3,47–3,58 sementara `targetFps` konfigurasi 20;
+  selisih itu **belum** diterima sebagai wajar maupun sebagai kegagalan karena
+  ambang belum disepakati (B-06). QC-47 tetap terbuka.
+- Sampel 5 menit (11 sampel, 30 detik, 720x1280, target 20, kualitas High):
+  11:08:37 `3,49` · 11:09:07 `3,51` · 11:09:37 `3,52` · 11:10:07 `3,58` ·
+  11:10:38 `3,58` · 11:11:08 `3,58` · 11:11:39 `3,53` · 11:12:09 `3,53` ·
+  11:12:40 `3,53` · 11:13:10 `3,57` · 11:13:40 `3,47`. `frameSeq` naik ±107 per 30 detik.
+- Suhu (`dumpsys thermalservice`, bagian "Current temperatures from HAL",
+  sesudah sampel): CPU 55,7–62,1 °C, GPU 50,6–51,6 °C, `skin` 45,7 °C
+  (`mStatus=3`), `Thermal Status: 3`. Suhu sebelum sampel (`Cached`, bukan
+  pembacaan langsung) tidak dapat dijadikan pembanding.
+- Catatan: `Thermal Status: 3` tercatat pada perangkat selama uji. FPS 3,5
+  dicapai dalam kondisi itu; belum diuji apakah status termal lebih rendah
+  menghasilkan FPS berbeda.
+- Catatan lama: uji parsial sebelumnya 6 sampel dalam ±3 menit.
 - Catatan hasil parsial: `measuredFps` dari `/status` tiap 30 detik pada
   720x1280, `targetFps` 20: 3,22 → 3,49 → 3,50 → 3,46 → 3,48 (09:41–09:43,
   layar menyala, aplikasi di latar belakang). Setelah layar tidur, satu sampel
@@ -200,9 +224,16 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 
 ### MV-08 — Bandwidth terukur
 
-- Status: `BELUM DIUJI`
+- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026, APK 1050, LAN `10.42.0.83:8085`)
 - Kebutuhan: CWG-N05
-- Perangkat: ____
+- Perangkat: `ZP2222SQLL`
+- Hasil parsial (`curl` 62 detik, `curl -w %{speed_download}`, 720x1280):
+  - High (q80, default): 11816434 byte, ±190585 B/s, `measuredFps` 3,63
+  - Medium (q50): 3988733 byte, ±64333 B/s (`exit=28` karena `-m 62`, disengaja)
+  - Low (q30): 5692747 byte, ±91817 B/s, `exit=28` karena `-m 62`, disengaja
+- Anomali: Low lebih besar dari Medium. Tidak dijelaskan oleh data yang ada
+  (kemungkinan konten adegan berubah antar-uji). Uji ulang berurutan dengan
+  adegan tetap diperlukan sebelum angka ini dipakai.
 - Prosedur: ukur byte yang diterima klien selama 60 detik pada kualitas
   konfigurasi default, ulangi pada kualitas minimum dan maksimum.
 - Bukti: byte/detik per tingkat kualitas, cara pengukuran.
@@ -277,8 +308,12 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 
 ### MV-13 — Pembatasan alamat klien
 
-- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: sisi tolak terbukti, sisi terima belum)
-- Catatan hasil: APK uji dengan `allowedAddresses=10.99.99.99`; akses dari `127.0.0.1` → `401` `ADDRESS_NOT_ALLOWED`. Sisi terima belum diuji.
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK 1036)
+- Catatan hasil: sisi tolak (APK 0947, `allowedAddresses=10.99.99.99`): akses
+  dari `127.0.0.1` → `401` `ADDRESS_NOT_ALLOWED`. Sisi terima (APK 1036,
+  `allowedAddresses=127.0.0.1`): `/status` dari `127.0.0.1` dengan token benar
+  → `200` (JSON memuat `streaming:true`, `720x1280`), tanpa token → `401`,
+  token salah → `401`. `/video` dengan token benar → `200`.
 - Kebutuhan: CWG-15, CWG-N06
 - Perangkat: ____
 - Prosedur: isi `camwastegreen.allowedAddresses` dengan satu alamat, lalu
@@ -298,9 +333,14 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 - Bukti yang sudah ada: log WP-35 mencatat `0.0.0.0:8085` untuk "semua",
   `10.42.0.83:8085` untuk Wi-Fi/LAN, dan penolakan start untuk USB tethering
   tanpa interface.
-- Bukti yang masih harus diisi: USB tethering nyata (`usb0` dengan IPv4),
-  dan tangkapan layar yang menunjukkan tombol terapkan nonaktif saat
-  streaming.
+- Bukti 8 Nov 2026: `.work/evidence/mv14-interface-locked-20261108.png`
+  (panel dibuka saat streaming aktif) memuat teks OCR "Hentikan stream untuk
+  mengganti interface"; bagian interface tampil tanpa tombol aktif yang bisa
+  diubah. `/proc/net/tcp6` memuat listener `:1F95` (8085) di `::` untuk
+  pilihan "semua" (state `0A` LISTEN).
+- Bukti yang masih harus diisi: USB tethering nyata (`usb0` dengan IPv4).
+  Pilihan USB tethering tanpa interface sudah terbukti ditolak (WP-35), tetapi
+  jalur tethering yang berjalan belum.
 - Tanggal: ____
 - Catatan: ____
 
@@ -315,15 +355,15 @@ uidState: TOP ...]`. Jadi tidak ada autostart kamera, konsisten dengan D-32.
 | MV-03 | `BELUM DIUJI` | bukti sebelumnya dicabut: notifikasi 10:18:14 bersamaan pembukaan app, bukan boot |
 | MV-04 | `TERUJI-SESUAI` | `clients:2` |
 | MV-05 | `TERUJI-SESUAI` | klien ketiga `503` "Batas 2 klien tercapai" |
-| MV-06 | `BELUM DIUJI` | parsial: server tidak terblokir; pemutusan oleh server belum |
-| MV-07 | `BELUM DIUJI` | parsial: 3,2–3,5 FPS, ±3 menit, bukan 5 menit |
-| MV-08 | `BELUM DIUJI` | belum diukur |
+| MV-06 | `BELUM DIUJI` | parsial: server tidak terblokir; pemutusan oleh server belum terbukti (lihat catatan MV-06) |
+| MV-07 | `TERUJI-SESUAI` | 5 menit: 3,47–3,58 FPS pada target 20; `Thermal Status: 3`; selisih vs target belum dinilai (B-06, QC-47) |
+| MV-08 | `BELUM DIUJI` | parsial: High ~190 kB/s, Medium ~64 kB/s, Low ~92 kB/s; Low>Medium tidak dijelaskan |
 | MV-09 | `BELUM DIUJI` | parsial: `tuningState=locked`; perbandingan bingkai belum |
 | MV-10 | `BELUM DIUJI` | butuh dudukan sebenarnya |
 | MV-11 | `TERUJI-SESUAI` | 720x1280 dari `/status` dan JPEG |
 | MV-12 | `TERUJI-SESUAI` | `MISSING_KEY`/`WRONG_KEY` → 401, token benar → 200 |
-| MV-13 | `BELUM DIUJI` | parsial: `ADDRESS_NOT_ALLOWED`; sisi terima belum |
-| MV-14 | `BELUM DIUJI` | USB tethering nyata dan tangkapan tombol terkunci belum |
+| MV-13 | `TERUJI-SESUAI` | 8 Nov 2026, APK 1036 dengan `allowedAddresses=127.0.0.1`: `/status` dari `127.0.0.1` dengan token benar → `200`, tanpa token → `401`; `ADDRESS_NOT_ALLOWED` dari APK 0947 tetap berlaku |
+| MV-14 | `BELUM DIUJI` | parsial: tombol terkunci saat streaming (tangkapan `mv14-interface-locked-20261108.png`); listener `::` untuk "semua"; USB tethering nyata belum |
 
 Butir `TERUJI-SESUAI` hanya berlaku untuk perangkat `ZP2222SQLL` pada
 8 November 2026 dengan APK uji. Butir itu **tidak** menetapkan ambang mutu:
