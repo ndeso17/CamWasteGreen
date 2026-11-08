@@ -8,7 +8,7 @@ import org.junit.Test
  * Test [CameraConfig] (CWG-08, CWG-N06).
  *
  * Angka default diuji terhadap D-29. Bila default diubah tanpa memperbarui
- * keputusan itu, test ini harus gagal — itulah gunanya.
+ * keputusan itu, test ini harus gagal. Itulah gunanya.
  */
 class CameraConfigTest {
 

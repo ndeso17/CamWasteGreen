@@ -9,10 +9,11 @@ import java.security.SecureRandom
 class SessionTokenTest {
 
     @Test
-    fun tokenHasSixtyFourLowercaseHexChars() {
+    fun tokenIsSixteenUppercaseHexChars() {
         val token = SessionToken.generate()
         assertEquals(SessionToken.BYTE_LENGTH * 2, token.length)
-        assertTrue(token.all { it in '0'..'9' || it in 'a'..'f' })
+        assertEquals(16, token.length)
+        assertTrue(token.all { it in '0'..'9' || it in 'A'..'F' })
     }
 
     @Test
@@ -24,7 +25,7 @@ class SessionTokenTest {
             }
         }
         val token = SessionToken.generate(fake)
-        assertEquals("ab".repeat(SessionToken.BYTE_LENGTH), token)
+        assertEquals("AB".repeat(SessionToken.BYTE_LENGTH), token)
     }
 
     @Test

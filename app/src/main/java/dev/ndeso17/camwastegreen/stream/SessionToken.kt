@@ -9,18 +9,22 @@ import java.security.SecureRandom
  * ditampilkan di layar operator. Token tidak berasal dari APK dan tidak ditulis
  * ke disk, sehingga APK yang beredar tidak membawa kunci yang bisa diekstrak.
  *
+ * Panjang 8 byte (64 bit, 16 karakter hex huruf besar) dipilih agar cukup acak
+ * untuk brute force lewat HTTP di LAN, tetapi masih bisa dibaca dan diketik
+ * ulang dari layar ponsel.
+ *
  * Murni JVM supaya bisa diuji tanpa perangkat.
  */
 object SessionToken {
 
     /** Panjang token dalam byte; hasil hex dua kali lipatnya. */
-    const val BYTE_LENGTH = 32
+    const val BYTE_LENGTH = 8
 
-    private val HEX = "0123456789abcdef".toCharArray()
+    private val HEX = "0123456789ABCDEF".toCharArray()
 
     /**
      * @param random sumber acak; dapat diganti di test
-     * @return token hex sepanjang [BYTE_LENGTH] * 2 karakter, huruf kecil
+     * @return token hex sepanjang [BYTE_LENGTH] * 2 karakter, huruf besar
      */
     fun generate(random: SecureRandom = SecureRandom()): String {
         val bytes = ByteArray(BYTE_LENGTH)

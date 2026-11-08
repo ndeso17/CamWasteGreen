@@ -2,6 +2,8 @@ package dev.ndeso17.camwastegreen
 
 import android.Manifest
 import android.app.admin.DevicePolicyManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -36,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvQualityInfo: TextView
     private lateinit var tvIpInfo: TextView
     private lateinit var tvApiKey: TextView
+    private lateinit var btnCopyApiKey: ImageButton
+    private lateinit var btnShareApiKey: ImageButton
     private lateinit var tvFpsValue: TextView
     private lateinit var tvQualityValue: TextView
     private lateinit var btnRecordBg: View
@@ -163,6 +167,8 @@ class MainActivity : AppCompatActivity() {
         tvQualityInfo = findViewById(R.id.tvQualityInfo)
         tvIpInfo = findViewById(R.id.tvIpInfo)
         tvApiKey = findViewById(R.id.tvApiKey)
+        btnCopyApiKey = findViewById(R.id.btnCopyApiKey)
+        btnShareApiKey = findViewById(R.id.btnShareApiKey)
         tvFpsValue = findViewById(R.id.tvFpsValue)
         tvQualityValue = findViewById(R.id.tvQualityValue)
         btnRecordBg = findViewById(R.id.btnRecordBg)
@@ -234,6 +240,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnScreenOff.setOnClickListener { requestScreenOff() }
+
+        btnCopyApiKey.setOnClickListener { copyApiKey() }
+        btnShareApiKey.setOnClickListener { shareApiKey() }
 
         btnSwitchCamera.setOnClickListener {
             if (MJPEGServerInstance.isRunning()) {
@@ -345,6 +354,13 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.label_api_key, it)
         } ?: getString(R.string.label_api_key_none)
 
+        // Token hanya ada selama stream berjalan; tombol dinonaktifkan kalau tidak.
+        val hasApiKey = MJPEGServerInstance.getApiKey() != null
+        btnCopyApiKey.isEnabled = hasApiKey
+        btnShareApiKey.isEnabled = hasApiKey
+        btnCopyApiKey.alpha = if (hasApiKey) 1f else 0.4f
+        btnShareApiKey.alpha = if (hasApiKey) 1f else 0.4f
+
         tvUsbStatus.text = getUsbTetheringIp()
 
         btnRecordBg.setBackgroundResource(
@@ -382,6 +398,40 @@ class MainActivity : AppCompatActivity() {
         val showPreview = running && previewEnabled && serviceBinder != null
         previewView.visibility = if (showPreview) View.VISIBLE else View.GONE
         previewOverlay.visibility = if (showPreview) View.GONE else View.VISIBLE
+    }
+
+    /** Salin token ke papan klip agar tidak perlu diketik dari layar. */
+    private fun copyApiKey() {
+        val key = MJPEGServerInstance.getApiKey()
+        if (key == null) {
+            Toast.makeText(this, R.string.toast_api_key_not_running, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        if (clipboard == null) {
+            Toast.makeText(this, R.string.toast_lock_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.label_api_key_label), key))
+        Toast.makeText(this, R.string.toast_api_key_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    /** Bagikan token beserta alamat stream lewat aplikasi lain di perangkat. */
+    private fun shareApiKey() {
+        val key = MJPEGServerInstance.getApiKey()
+        if (key == null) {
+            Toast.makeText(this, R.string.toast_api_key_not_running, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, getString(R.string.text_share_api_key, key))
+        }
+        try {
+            startActivity(Intent.createChooser(send, getString(R.string.cd_share_api_key)))
+        } catch (e: Exception) {
+            Log.e(TAG, "Chooser bagikan token tidak dapat dibuka: ${e.message}", e)
+        }
     }
 
     /**

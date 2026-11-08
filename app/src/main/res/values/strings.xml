@@ -3,7 +3,7 @@
 
     <!-- Status yang ditampilkan Activity. Nilai terukur diisi dari registry service. -->
     <string name="label_fps_measured">FPS terukur: %1$.1f</string>
-    <string name="label_fps_measured_none">FPS terukur: —</string>
+    <string name="label_fps_measured_none">FPS terukur: belum ada</string>
     <string name="label_quality_level">Kualitas: %1$s</string>
     <string name="label_stream_url">Stream: http://%1$s:%2$d/video</string>
     <string name="label_stream_offline">Stream offline</string>
@@ -39,7 +39,13 @@
     <string name="toast_interface_saved">Interface disimpan; berlaku saat stream dimulai</string>
     <string name="label_stream_url_all">Stream (semua interface): http://%1$s:%2$d/video</string>
     <string name="label_api_key">Token X-Api-Key: %1$s</string>
-    <string name="label_api_key_none">Token: — (stream belum berjalan)</string>
+    <string name="label_api_key_label">Token CamWasteGreen</string>
+    <string name="label_api_key_none">Token: belum ada (stream belum berjalan)</string>
+    <string name="cd_copy_api_key">Salin token ke papan klip</string>
+    <string name="cd_share_api_key">Bagikan token</string>
+    <string name="toast_api_key_copied">Token disalin</string>
+    <string name="toast_api_key_not_running">Token belum ada; mulai stream dulu</string>
+    <string name="text_share_api_key">Token X-Api-Key CamWasteGreen: %1$s</string>
 
     <!-- Pengingat setelah boot (WP-19, D-32). Kamera tidak dinyalakan otomatis. -->
     <string name="notif_channel_boot">Pengingat setelah boot</string>
