@@ -1,16 +1,18 @@
 # Checklist MANUAL-VERIFY kamera CamWasteGreen
 
-Berkas ini adalah **daftar periksa yang belum dikerjakan**, bukan bukti hasil.
-Semua butir berstatus `BELUM DIUJI`.
+Berkas ini adalah **daftar periksa hasil pengujian perangkat**, bukan bukti
+bahwa kebutuhan sudah terpenuhi untuk semua perangkat.
 
-Alasan: pada sesi 2026-11-08 tidak ada perangkat yang terhubung
-(`adb devices` kosong). Sebelumnya pengujian memakai `ZP2222SQLL`
-(moto g57 power, Android 16, targetSdk 34), tetapi perangkat itu tidak lagi
-terdeteksi.
+Per 8 November 2026 sebagian butir sudah diuji pada `ZP2222SQLL`
+(moto g57 power, Android 16, targetSdk 34) dengan APK uji bertoken. Butir yang
+belum dijalankan tetap `BELUM DIUJI`; butir yang tidak dapat dijalankan pada
+perangkat ini ditandai `TIDAK-DAPAT-DIUJI` beserta alasannya. Butir yang baru
+sebagian diuji ditandai `BELUM DIUJI` dengan catatan `uji parsial` agar tidak
+terbaca sebagai lulus.
 
 Aturan pengisian:
-- Jangan ubah status menjadi teruji tanpa mengisi kolom **Bukti** dan
-  **Tanggal**.
+- Jangan ubah status menjadi teruji tanpa mencatat **hasil** dan **tanggal**
+  (tanggal ada di baris status, hasil di `Catatan hasil`).
 - Angka FPS, latensi, dan toleransi posisi **belum disepakati** (B-06).
   Catat hasil ukur apa adanya; jangan menetapkan ambang keberterimaan sendiri.
 - Simpan tangkapan log, `curl`, dan berkas keluaran di `.work/evidence/`.
@@ -24,7 +26,15 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-01 — Layar mati tidak menghentikan stream
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: setelah `KEYCODE_SLEEP`, `dumpsys power` menunjukkan
+  `mWakefulness=Dozing`. Setelah 60 detik, `curl /video` menjawab `HTTP=200`
+  dan `bytes=1932032`; `/status` tetap `streaming:true`, `frameSeq` naik
+  (768 → 1241). `dumpsys activity services`:
+  `ServiceRecord{... dev.ndeso17.camwastegreen/.CameraService}`, 
+  `isForeground=true foregroundId=1001 types=0x00000040`
+  (`FOREGROUND_SERVICE_TYPE_CAMERA`), notifikasi `channel=camera_stream`
+  dengan flag `ONGOING_EVENT|NO_CLEAR`.
 - Kebutuhan: CWG-11
 - Perangkat: ____
 - Prosedur: mulai stream, kunci layar (tombol power), tunggu 60 detik,
@@ -37,7 +47,11 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-02 — Aplikasi di latar belakang tetap melayani
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: setelah `KEYCODE_HOME`, `topResumedActivity` =
+  `com.motorola.launcher3/...CustomizationPanelLauncher`. `/status` tiap 30 detik
+  selama ±3 menit tetap `streaming:true`, `frameSeq` naik (244 → 768),
+  `measuredFps` 3,2–3,5. Bukti tekstual di sesi; tangkapan layar belum disimpan.
 - Kebutuhan: CWG-11
 - Perangkat: ____
 - Prosedur: mulai stream, tekan HOME, buka aplikasi lain, tunggu 60 detik,
@@ -49,7 +63,19 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-03 — Pengingat setelah boot
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK `c08e354`)
+- Catatan hasil: setelah `adb reboot`, `dumpsys notification` menampilkan
+  `NotificationRecord(... id=1002 channel=boot_reminder ... category=reminder
+  flags=AUTO_CANCEL)` dengan waktu `when=1794105059361` (≈2 menit setelah
+  `BOOT_COMPLETED` pukul 09:28:53). Kanal `boot_reminder` bernama
+  "Pengingat setelah boot", importance=3. `am_proc_start` mencatat
+  `reason=broadcast`; `ps -A` dan `dumpsys activity services` tidak memuat
+  CamWasteGreen sama sekali → kamera **tidak** berjalan. Tangkapan layar baki
+  notifikasi menunjukkan teks "Kamera belum menyala" dan "Android tidak
+  mengizinkan kamera dinyalakan otomatis s…" — tersimpan sebagai
+  `.work/evidence/mv03-shade-20261108.png`. Logcat tidak lagi memuat baris
+  `IPCam.BootReceiver` (buffer sudah berputar), jadi bukti memakai
+  `dumpsys notification` dan tangkapan layar.
 - Kebutuhan: CWG-12 (bentuk baru menurut D-32)
 - Perangkat: ____
 - Prosedur: berikan izin notifikasi, reboot perangkat, tunggu 90 detik tanpa
@@ -80,7 +106,9 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-04 — Dua klien bersamaan diterima
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: dua `curl /video` dengan `X-Api-Key` benar berjalan bersamaan;
+  `/status` menunjukkan `clients:2`.
 - Kebutuhan: CWG-10
 - Perangkat: ____
 - Prosedur: buka dua `curl` `/video` bersamaan selama 30 detik, lalu baca
@@ -92,7 +120,9 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-05 — Klien ketiga ditolak dengan alasan jelas
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: klien ketiga menerima `HTTP=503` dengan badan
+  `Batas 2 klien tercapai`.
 - Kebutuhan: CWG-10
 - Perangkat: ____
 - Prosedur: dengan dua klien berjalan, buka klien ketiga.
@@ -102,7 +132,15 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-06 — Klien lambat diputus tanpa memblokir server
 
-- Status: `BELUM DIUJI`
+- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: server tetap melayani; pemutusan oleh server belum terbukti)
+- Catatan hasil: satu klien `curl --limit-rate 2k` membaca `/video` selama
+  70 detik (270336 byte terkirim) sementara `/status` dipanggil tiap 10
+  detik. Semua balasan `/status` `HTTP=200` dengan waktu tanggap 15–25 ms,
+  jadi klien lambat tidak memblokir server. Klien lambat terputus oleh
+  `curl --max-time`; pemutusan oleh sisi server belum dibedakan dari pemutusan
+  karena `curl` menutup koneksi — `clients` kembali `0` sesudah koneksi
+  ditutup. Perilaku "klien lambat diputus oleh server" sendiri belum
+  dibuktikan secara terpisah.
 - Kebutuhan: CWG-09
 - Perangkat: ____
 - Prosedur: hubungkan klien yang membaca sangat lambat (mis.
@@ -117,7 +155,13 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-07 — FPS terukur pada perangkat
 
-- Status: `BELUM DIUJI`
+- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: 6 sampel dalam ±3 menit, bukan 5 menit penuh)
+- Catatan hasil parsial: `measuredFps` dari `/status` tiap 30 detik pada
+  720x1280, `targetFps` 20: 3,22 → 3,49 → 3,50 → 3,46 → 3,48 (09:41–09:43,
+  layar menyala, aplikasi di latar belakang). Setelah layar tidur, satu sampel
+  3,40. `frameSeq` naik konsisten ±105 per 30 detik. Suhu perangkat tidak
+  dicatat. Angka ini hasil satu perangkat dan **bukan** ambang kelulusan
+  (B-06 tetap terbuka).
 - Kebutuhan: CWG-08, CWG-N05
 - Perangkat: ____
 - Prosedur: jalankan stream 5 menit pada resolusi dan FPS konfigurasi default,
@@ -144,7 +188,12 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-09 — Kunci AE/AWB/AF berperilaku setelah warmup
 
-- Status: `BELUM DIUJI`
+- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: `tuningState` terbaca `locked`; perbandingan bingkai belum)
+- Catatan hasil: `/status` melaporkan `tuningState:"locked"` secara
+  konsisten sejak stream berjalan lebih dari 30 frame pada semua pembacaan
+  (09:40 sampai 09:52). Tidak ada pembacaan `unsupported` maupun `failed`.
+  Perbandingan visual warna antar bingkai belum dilakukan, jadi yang
+  terbukti adalah state kunci, bukan kualitas warnanya.
 - Kebutuhan: CWG-07, CWG-13
 - Perangkat: ____
 - Prosedur: arahkan kamera ke objek warna berbeda bergantian; setelah 30
@@ -172,7 +221,9 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-11 — Resolusi nyata setelah `ResolutionSelector`
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: `/status` `width:720`, `height:1280`; JPEG `/video` juga
+  720x1280. QC-46 (1440x1440) tidak terulang pada uji ini.
 - Kebutuhan: CWG-08
 - Perangkat: ____
 - Prosedur: baca `width`/`height` dari `/status` setelah stream berjalan.
@@ -186,7 +237,10 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-12 — Penolakan tanpa token dan token salah
 
-- Status: `BELUM DIUJI`
+- Status: `TERUJI-SESUAI` (8 Nov 2026, perangkat `ZP2222SQLL`, APK uji)
+- Catatan hasil: tanpa header → `401` `MISSING_KEY`; token salah → `401`
+  `WRONG_KEY`; token benar → `200` dan JSON `/status`. Uji dari `127.0.0.1` via
+  `adb forward`, belum dari mesin lain di LAN.
 - Kebutuhan: CWG-15
 - Perangkat: ____
 - Prosedur: dari mesin lain, akses `/status` tanpa header, dengan header
@@ -198,7 +252,8 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ### MV-13 — Pembatasan alamat klien
 
-- Status: `BELUM DIUJI`
+- Status: `BELUM DIUJI` (uji parsial 8 Nov 2026: sisi tolak terbukti, sisi terima belum)
+- Catatan hasil: APK uji dengan `allowedAddresses=10.99.99.99`; akses dari `127.0.0.1` → `401` `ADDRESS_NOT_ALLOWED`. Sisi terima belum diuji.
 - Kebutuhan: CWG-15, CWG-N06
 - Perangkat: ____
 - Prosedur: isi `camwastegreen.allowedAddresses` dengan satu alamat, lalu
@@ -228,9 +283,25 @@ Kolom status yang dipakai: `BELUM DIUJI`, `TERUJI-SESUAI`, `TERUJI-TIDAK-SESUAI`
 
 ## Ringkasan
 
-| Butir | Status |
-|---|---|
-| MV-01 .. MV-14 | `BELUM DIUJI` |
+| Butir | Status | Catatan |
+|---|---|---|
+| MV-01 | `TERUJI-SESUAI` | layar tidur, `/video` 200, service foreground `camera` |
+| MV-02 | `TERUJI-SESUAI` | latar belakang, `/status` tetap `streaming:true` |
+| MV-03 | `TERUJI-SESUAI` | notifikasi `boot_reminder` id=1002, kamera tidak jalan |
+| MV-04 | `TERUJI-SESUAI` | `clients:2` |
+| MV-05 | `TERUJI-SESUAI` | klien ketiga `503` "Batas 2 klien tercapai" |
+| MV-06 | `BELUM DIUJI` | parsial: server tidak terblokir; pemutusan oleh server belum |
+| MV-07 | `BELUM DIUJI` | parsial: 3,2–3,5 FPS, ±3 menit, bukan 5 menit |
+| MV-08 | `BELUM DIUJI` | belum diukur |
+| MV-09 | `BELUM DIUJI` | parsial: `tuningState=locked`; perbandingan bingkai belum |
+| MV-10 | `BELUM DIUJI` | butuh dudukan sebenarnya |
+| MV-11 | `TERUJI-SESUAI` | 720x1280 dari `/status` dan JPEG |
+| MV-12 | `TERUJI-SESUAI` | `MISSING_KEY`/`WRONG_KEY` → 401, token benar → 200 |
+| MV-13 | `BELUM DIUJI` | parsial: `ADDRESS_NOT_ALLOWED`; sisi terima belum |
+| MV-14 | `BELUM DIUJI` | USB tethering nyata dan tangkapan tombol terkunci belum |
 
-Tidak ada butir pada berkas ini yang boleh dipakai sebagai bukti bahwa
-kebutuhan terkait telah terpenuhi.
+Butir `TERUJI-SESUAI` hanya berlaku untuk perangkat `ZP2222SQLL` pada
+8 November 2026 dengan APK uji. Butir itu **tidak** menetapkan ambang mutu:
+`B-06` (FPS/latensi/usia frame) tetap terbuka, `B-03` (geometri pemasangan)
+tetap terbuka, dan MV-10 belum dapat dijalankan tanpa dudukan sebenarnya.
+Butir yang belum diuji tidak boleh dipakai sebagai bukti pemenuhan kebutuhan.
